@@ -1,5 +1,7 @@
-import { Plus, Search, Filter, X, ChevronRight } from 'lucide-react';
+import { Plus, Search, Filter, X, ChevronRight, Edit2, CheckCircle2, Clock, XCircle, DollarSign, Eye, Send, Ban } from 'lucide-react';
 import { useState } from 'react';
+
+type QuoteState = 'draft' | 'sent' | 'viewed' | 'accepted' | 'deposit_paid' | 'expired' | 'cancelled';
 
 interface Quote {
   id: string;
@@ -8,14 +10,42 @@ interface Quote {
   email: string;
   phone: string;
   service: string;
-  amount: number;
-  status: 'pending' | 'accepted' | 'paid' | 'declined';
+  calculatedAmount: number;
+  overrideAmount?: number;
+  overrideReason?: string;
+  finalAmount: number;
+  state: QuoteState;
   date: string;
+  sentAt?: string;
+  viewedAt?: string;
+  acceptedAt?: string;
+  depositPaidAt?: string;
+  expiredAt?: string;
+  cancelledAt?: string;
+  expiresOn?: string;
   lawnsqft: number;
   plan: string;
+  depositRequired: boolean;
+  depositAmount?: number;
 }
 
 type QuickQuoteStep = 1 | 2 | 3 | 4 | 5;
+
+const getStateColor = (state: QuoteState) => {
+  switch (state) {
+    case 'draft': return 'bg-gray-100 text-gray-800';
+    case 'sent': return 'bg-blue-100 text-blue-800';
+    case 'viewed': return 'bg-cyan-100 text-cyan-800';
+    case 'accepted': return 'bg-green-100 text-green-800';
+    case 'deposit_paid': return 'bg-green-100 text-green-800';
+    case 'expired': return 'bg-orange-100 text-orange-800';
+    case 'cancelled': return 'bg-red-100 text-red-800';
+  }
+};
+
+const getStateLabel = (state: QuoteState) => {
+  return state.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+};
 
 export default function Quotes() {
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
@@ -24,18 +54,22 @@ export default function Quotes() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showPriceOverride, setShowPriceOverride] = useState(false);
+  const [overridePrice, setOverridePrice] = useState('55');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [calculatedPrice] = useState(55);
 
   const quotes: Quote[] = [
-    { id: '1', address: '123 Maple St', customer: 'John Smith', email: 'john@email.com', phone: '555-0101', service: 'Weekly Mowing', amount: 55, status: 'paid', date: '2024-02-14', lawnsqft: 5200, plan: 'Standard' },
-    { id: '2', address: '456 Oak Ave', customer: 'Sarah Johnson', email: 'sarah@email.com', phone: '555-0102', service: 'Bi-weekly Mowing', amount: 75, status: 'accepted', date: '2024-02-13', lawnsqft: 8100, plan: 'Premium' },
-    { id: '3', address: '789 Pine Rd', customer: 'Mike Davis', email: 'mike@email.com', phone: '555-0103', service: 'Monthly Service', amount: 120, status: 'pending', date: '2024-02-13', lawnsqft: 12000, plan: 'Premium Plus' },
-    { id: '4', address: '321 Elm St', customer: 'Emily Brown', email: 'emily@email.com', phone: '555-0104', service: 'Weekly Mowing', amount: 45, status: 'paid', date: '2024-02-12', lawnsqft: 4200, plan: 'Basic' },
-    { id: '5', address: '654 Birch Ln', customer: 'Tom Wilson', email: 'tom@email.com', phone: '555-0105', service: 'Bi-weekly Mowing', amount: 85, status: 'declined', date: '2024-02-12', lawnsqft: 9500, plan: 'Premium' },
-    { id: '6', address: '987 Cedar Dr', customer: 'Lisa Garcia', email: 'lisa@email.com', phone: '555-0106', service: 'Weekly Mowing', amount: 60, status: 'pending', date: '2024-02-11', lawnsqft: 6200, plan: 'Standard' },
+    { id: '1', address: '123 Maple St', customer: 'John Smith', email: 'john@email.com', phone: '555-0101', service: 'Weekly Mowing', calculatedAmount: 55, finalAmount: 55, state: 'deposit_paid', date: '2024-02-14', sentAt: '2024-02-14', viewedAt: '2024-02-14', acceptedAt: '2024-02-14', depositPaidAt: '2024-02-14', lawnsqft: 5200, plan: 'Standard', depositRequired: true, depositAmount: 20 },
+    { id: '2', address: '456 Oak Ave', customer: 'Sarah Johnson', email: 'sarah@email.com', phone: '555-0102', service: 'Bi-weekly Mowing', calculatedAmount: 75, finalAmount: 75, state: 'accepted', date: '2024-02-13', sentAt: '2024-02-13', viewedAt: '2024-02-13', acceptedAt: '2024-02-13', lawnsqft: 8100, plan: 'Premium', depositRequired: false },
+    { id: '3', address: '789 Pine Rd', customer: 'Mike Davis', email: 'mike@email.com', phone: '555-0103', service: 'Monthly Service', calculatedAmount: 115, overrideAmount: 120, overrideReason: 'Additional travel distance', finalAmount: 120, state: 'viewed', date: '2024-02-13', sentAt: '2024-02-13', viewedAt: '2024-02-13', expiresOn: '2024-02-20', lawnsqft: 12000, plan: 'Premium Plus', depositRequired: true, depositAmount: 50 },
+    { id: '4', address: '321 Elm St', customer: 'Emily Brown', email: 'emily@email.com', phone: '555-0104', service: 'Weekly Mowing', calculatedAmount: 45, finalAmount: 45, state: 'deposit_paid', date: '2024-02-12', sentAt: '2024-02-12', viewedAt: '2024-02-12', acceptedAt: '2024-02-12', depositPaidAt: '2024-02-12', lawnsqft: 4200, plan: 'Basic', depositRequired: true, depositAmount: 20 },
+    { id: '5', address: '654 Birch Ln', customer: 'Tom Wilson', email: 'tom@email.com', phone: '555-0105', service: 'Bi-weekly Mowing', calculatedAmount: 85, finalAmount: 85, state: 'cancelled', date: '2024-02-12', sentAt: '2024-02-12', cancelledAt: '2024-02-13', lawnsqft: 9500, plan: 'Premium', depositRequired: false },
+    { id: '6', address: '987 Cedar Dr', customer: 'Lisa Garcia', email: 'lisa@email.com', phone: '555-0106', service: 'Weekly Mowing', calculatedAmount: 60, finalAmount: 60, state: 'sent', date: '2024-02-11', sentAt: '2024-02-11', expiresOn: '2024-02-18', lawnsqft: 6200, plan: 'Standard', depositRequired: false },
   ];
 
   const filteredQuotes = quotes.filter(quote => {
-    const matchesStatus = statusFilter === 'all' || quote.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || quote.state === statusFilter;
     const matchesSearch = quote.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          quote.address.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesStatus && matchesSearch;
@@ -151,13 +185,48 @@ export default function Quotes() {
                 <span className="font-medium text-gray-900">Standard - Weekly</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Base Price</span>
-                <span className="font-medium text-gray-900">$55</span>
+                <span className="text-gray-600">Calculated Price</span>
+                <span className="font-medium text-gray-900">${calculatedPrice}</span>
               </div>
+              {!showPriceOverride && (
+                <button
+                  onClick={() => setShowPriceOverride(true)}
+                  className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  Adjust price manually
+                </button>
+              )}
+              {showPriceOverride && (
+                <div className="pt-3 border-t border-gray-200 space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Override Price ($)</label>
+                    <input
+                      type="number"
+                      value={overridePrice}
+                      onChange={(e) => setOverridePrice(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      placeholder="e.g., Additional travel distance"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                    />
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    <p className="text-xs text-amber-800 font-medium">Manual Adjustment Applied</p>
+                  </div>
+                </div>
+              )}
               <div className="pt-3 border-t border-gray-200">
                 <div className="flex justify-between">
                   <span className="font-semibold text-gray-900">Total</span>
-                  <span className="text-xl font-bold text-gray-900">$55</span>
+                  <span className="text-xl font-bold text-gray-900">${showPriceOverride ? overridePrice : calculatedPrice}</span>
                 </div>
               </div>
             </div>
@@ -203,6 +272,73 @@ export default function Quotes() {
     }
   };
 
+  const renderStateTimeline = (quote: Quote) => {
+    const states = [
+      { key: 'sent', label: 'Sent', timestamp: quote.sentAt, icon: Send },
+      { key: 'viewed', label: 'Viewed', timestamp: quote.viewedAt, icon: Eye },
+      { key: 'accepted', label: 'Accepted', timestamp: quote.acceptedAt, icon: CheckCircle2 },
+      ...(quote.depositRequired ? [{ key: 'deposit_paid', label: 'Deposit Paid', timestamp: quote.depositPaidAt, icon: DollarSign }] : []),
+    ];
+
+    const terminalState = quote.state === 'expired' || quote.state === 'cancelled';
+
+    return (
+      <div className="space-y-3">
+        {states.map((state, idx) => {
+          const Icon = state.icon;
+          const isComplete = !!state.timestamp;
+          const isCurrent = quote.state === state.key;
+
+          return (
+            <div key={state.key} className="flex items-start gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                isComplete ? 'bg-green-100 text-green-600' :
+                isCurrent ? 'bg-blue-100 text-blue-600' :
+                'bg-gray-100 text-gray-400'
+              }`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <div className="flex-1 pt-0.5">
+                <p className={`text-sm font-medium ${isComplete || isCurrent ? 'text-gray-900' : 'text-gray-500'}`}>
+                  {state.label}
+                </p>
+                {state.timestamp && (
+                  <p className="text-xs text-gray-500">{state.timestamp}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {terminalState && (
+          <div className="flex items-start gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+              quote.state === 'expired' ? 'bg-orange-100 text-orange-600' : 'bg-red-100 text-red-600'
+            }`}>
+              {quote.state === 'expired' ? <Clock className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
+            </div>
+            <div className="flex-1 pt-0.5">
+              <p className="text-sm font-medium text-gray-900">
+                {quote.state === 'expired' ? 'Expired' : 'Cancelled'}
+              </p>
+              {(quote.expiredAt || quote.cancelledAt) && (
+                <p className="text-xs text-gray-500">{quote.expiredAt || quote.cancelledAt}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {quote.expiresOn && !terminalState && quote.state !== 'deposit_paid' && quote.state !== 'accepted' && (
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="text-xs text-amber-800">
+              <strong>Expires:</strong> {quote.expiresOn}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -214,6 +350,9 @@ export default function Quotes() {
           onClick={() => {
             setShowQuickQuote(true);
             setQuickQuoteStep(1);
+            setShowPriceOverride(false);
+            setOverridePrice('55');
+            setOverrideReason('');
           }}
           className="w-full sm:w-auto px-4 py-3 md:py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2 text-sm md:text-base"
         >
@@ -224,7 +363,6 @@ export default function Quotes() {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="p-4 border-b border-gray-200">
-          {/* Mobile: Search + Advanced Filter Button */}
           <div className="md:hidden space-y-3">
             <div className="flex gap-3">
               <div className="flex-1 relative">
@@ -245,7 +383,6 @@ export default function Quotes() {
               </button>
             </div>
 
-            {/* Quick Filter Tabs */}
             <div className="flex gap-2 overflow-x-auto">
               <button
                 onClick={() => setStatusFilter('all')}
@@ -258,29 +395,28 @@ export default function Quotes() {
                 All
               </button>
               <button
-                onClick={() => setStatusFilter('pending')}
+                onClick={() => setStatusFilter('sent')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  statusFilter === 'pending'
+                  statusFilter === 'sent'
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                Pending
+                Sent
               </button>
               <button
-                onClick={() => setStatusFilter('paid')}
+                onClick={() => setStatusFilter('accepted')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  statusFilter === 'paid'
+                  statusFilter === 'accepted'
                     ? 'bg-green-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                Paid
+                Accepted
               </button>
             </div>
           </div>
 
-          {/* Desktop: Search + Filter Inline */}
           <div className="hidden md:flex gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -300,10 +436,13 @@ export default function Quotes() {
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">All Status</option>
-                <option value="pending">Pending</option>
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="viewed">Viewed</option>
                 <option value="accepted">Accepted</option>
-                <option value="paid">Paid</option>
-                <option value="declined">Declined</option>
+                <option value="deposit_paid">Deposit Paid</option>
+                <option value="expired">Expired</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>
@@ -339,16 +478,14 @@ export default function Quotes() {
                     <div className="text-sm text-gray-600">{quote.service}</div>
                   </td>
                   <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">${quote.amount}</div>
+                    <div className="text-sm font-medium text-gray-900">${quote.finalAmount}</div>
+                    {quote.overrideAmount && (
+                      <div className="text-xs text-amber-600">Adjusted</div>
+                    )}
                   </td>
                   <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      quote.status === 'paid' ? 'bg-green-100 text-green-800' :
-                      quote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                      quote.status === 'declined' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStateColor(quote.state)}`}>
+                      {getStateLabel(quote.state)}
                     </span>
                   </td>
                   <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -368,23 +505,18 @@ export default function Quotes() {
             <div
               key={quote.id}
               onClick={() => setSelectedQuote(quote)}
-              className={`relative p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer border-l-4 ${
-                quote.status === 'paid' ? 'border-green-500' :
-                quote.status === 'accepted' ? 'border-blue-500' :
-                quote.status === 'pending' ? 'border-gray-300' :
-                'border-red-500'
-              }`}
+              className="relative p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
             >
               <div className="flex items-start justify-between mb-2">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                  quote.status === 'paid' ? 'bg-green-100 text-green-800' :
-                  quote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                  quote.status === 'declined' ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStateColor(quote.state)}`}>
+                  {getStateLabel(quote.state)}
                 </span>
-                <span className="text-lg font-bold text-gray-900">${quote.amount}</span>
+                <div className="text-right">
+                  <span className="text-lg font-bold text-gray-900">${quote.finalAmount}</span>
+                  {quote.overrideAmount && (
+                    <div className="text-xs text-amber-600">Adjusted</div>
+                  )}
+                </div>
               </div>
               <p className="text-sm font-semibold text-gray-900 mb-1">{quote.address}</p>
               <div className="flex items-center justify-between text-xs text-gray-500">
@@ -403,7 +535,6 @@ export default function Quotes() {
             onClick={() => setSelectedQuote(null)}
           />
 
-          {/* Desktop: Right slideout */}
           <div className="hidden md:block fixed inset-y-0 right-0 w-96 bg-white shadow-xl z-50 overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -418,6 +549,11 @@ export default function Quotes() {
 
               <div className="space-y-6">
                 <div>
+                  <p className="text-sm text-gray-500 mb-3">Quote Status</p>
+                  {renderStateTimeline(selectedQuote)}
+                </div>
+
+                <div className="pt-6 border-t border-gray-200">
                   <p className="text-sm text-gray-500 mb-1">Customer</p>
                   <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
                   <p className="text-sm text-gray-600">{selectedQuote.email}</p>
@@ -435,41 +571,57 @@ export default function Quotes() {
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Service Plan</p>
-                  <p className="text-base font-medium text-gray-900">{selectedQuote.plan}</p>
-                </div>
-
-                <div>
                   <p className="text-sm text-gray-500 mb-1">Service Type</p>
                   <p className="text-base font-medium text-gray-900">{selectedQuote.service}</p>
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-500 mb-1">Quote Amount</p>
-                  <p className="text-xl md:text-2xl font-bold text-gray-900">${selectedQuote.amount}</p>
+                  <p className="text-sm text-gray-500 mb-2">Pricing</p>
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Calculated</span>
+                      <span className="font-medium text-gray-900">${selectedQuote.calculatedAmount}</span>
+                    </div>
+                    {selectedQuote.overrideAmount && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Override</span>
+                          <span className="font-medium text-amber-600">${selectedQuote.overrideAmount}</span>
+                        </div>
+                        {selectedQuote.overrideReason && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <p className="text-xs text-gray-500">Reason: {selectedQuote.overrideReason}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-gray-900">Final Amount</span>
+                        <span className="text-xl font-bold text-gray-900">${selectedQuote.finalAmount}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">Status</p>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    selectedQuote.status === 'paid' ? 'bg-green-100 text-green-800' :
-                    selectedQuote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                    selectedQuote.status === 'declined' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {selectedQuote.status.charAt(0).toUpperCase() + selectedQuote.status.slice(1)}
-                  </span>
-                </div>
-
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Date Created</p>
-                  <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
-                </div>
+                {selectedQuote.depositRequired && selectedQuote.depositAmount && (
+                  <div>
+                    <p className="text-sm text-gray-500 mb-1">Deposit Required</p>
+                    <p className="text-base font-medium text-gray-900">${selectedQuote.depositAmount}</p>
+                  </div>
+                )}
 
                 <div className="pt-6 border-t border-gray-200 space-y-3">
-                  <button className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
-                    Send Reminder
-                  </button>
+                  {selectedQuote.state === 'sent' || selectedQuote.state === 'viewed' ? (
+                    <>
+                      <button className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+                        Send Reminder
+                      </button>
+                      <button className="w-full px-4 py-2.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors font-medium">
+                        Cancel Quote
+                      </button>
+                    </>
+                  ) : null}
                   <button className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                     View Customer Portal
                   </button>
@@ -478,7 +630,6 @@ export default function Quotes() {
             </div>
           </div>
 
-          {/* Mobile: Bottom sheet */}
           <div className="md:hidden fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl z-50 max-h-[85vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
@@ -495,6 +646,11 @@ export default function Quotes() {
 
             <div className="p-4 space-y-5">
               <div>
+                <p className="text-sm text-gray-500 mb-3">Quote Status</p>
+                {renderStateTimeline(selectedQuote)}
+              </div>
+
+              <div className="pt-5 border-t border-gray-200">
                 <p className="text-sm text-gray-500 mb-1">Customer</p>
                 <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
                 <p className="text-sm text-gray-600">{selectedQuote.email}</p>
@@ -512,42 +668,58 @@ export default function Quotes() {
               </div>
 
               <div>
-                <p className="text-sm text-gray-500 mb-1">Service Plan</p>
-                <p className="text-base font-medium text-gray-900">{selectedQuote.plan}</p>
-              </div>
-
-              <div>
                 <p className="text-sm text-gray-500 mb-1">Service Type</p>
                 <p className="text-base font-medium text-gray-900">{selectedQuote.service}</p>
               </div>
 
               <div>
-                <p className="text-sm text-gray-500 mb-1">Quote Amount</p>
-                <p className="text-2xl font-bold text-gray-900">${selectedQuote.amount}</p>
+                <p className="text-sm text-gray-500 mb-2">Pricing</p>
+                <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Calculated</span>
+                    <span className="font-medium text-gray-900">${selectedQuote.calculatedAmount}</span>
+                  </div>
+                  {selectedQuote.overrideAmount && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Override</span>
+                        <span className="font-medium text-amber-600">${selectedQuote.overrideAmount}</span>
+                      </div>
+                      {selectedQuote.overrideReason && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">Reason: {selectedQuote.overrideReason}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="pt-2 border-t border-gray-200">
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-gray-900">Final Amount</span>
+                      <span className="text-xl font-bold text-gray-900">${selectedQuote.finalAmount}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <p className="text-sm text-gray-500 mb-2">Status</p>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  selectedQuote.status === 'paid' ? 'bg-green-100 text-green-800' :
-                  selectedQuote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
-                  selectedQuote.status === 'declined' ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {selectedQuote.status.charAt(0).toUpperCase() + selectedQuote.status.slice(1)}
-                </span>
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Date Created</p>
-                <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
-              </div>
+              {selectedQuote.depositRequired && selectedQuote.depositAmount && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">Deposit Required</p>
+                  <p className="text-base font-medium text-gray-900">${selectedQuote.depositAmount}</p>
+                </div>
+              )}
             </div>
 
             <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 space-y-3">
-              <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-medium">
-                Send Reminder
-              </button>
+              {selectedQuote.state === 'sent' || selectedQuote.state === 'viewed' ? (
+                <>
+                  <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-medium">
+                    Send Reminder
+                  </button>
+                  <button className="w-full px-4 py-3 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 active:bg-red-100 transition-colors font-medium">
+                    Cancel Quote
+                  </button>
+                </>
+              ) : null}
               <button className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors font-medium">
                 View Customer Portal
               </button>
@@ -556,7 +728,6 @@ export default function Quotes() {
         </>
       )}
 
-      {/* Filter Bottom Sheet (Mobile) */}
       {showFilters && (
         <>
           <div
@@ -586,10 +757,13 @@ export default function Quotes() {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 >
                   <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="viewed">Viewed</option>
                   <option value="accepted">Accepted</option>
-                  <option value="paid">Paid</option>
-                  <option value="declined">Declined</option>
+                  <option value="deposit_paid">Deposit Paid</option>
+                  <option value="expired">Expired</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
             </div>
