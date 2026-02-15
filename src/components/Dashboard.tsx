@@ -1,4 +1,4 @@
-import { DollarSign, FileText, TrendingUp, Users, X } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Percent, X, Plus, Eye, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 interface Quote {
@@ -13,14 +13,24 @@ interface Quote {
   plan: string;
 }
 
-export default function Dashboard() {
+type TimeRange = '7d' | '30d' | '90d';
+
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
+
+export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+
+  const hasServices = true;
+  const hasQuotes = true;
 
   const kpis = [
-    { label: 'Total Quotes', value: '1,247', change: '+12.5%', icon: FileText, color: 'blue' },
-    { label: 'Deposits Collected', value: '$34,280', change: '+18.2%', icon: DollarSign, color: 'green' },
-    { label: 'Conversion Rate', value: '24.3%', change: '+3.1%', icon: TrendingUp, color: 'green' },
-    { label: 'Active Customers', value: '342', change: '+7.8%', icon: Users, color: 'blue' },
+    { label: 'Quotes Generated (30d)', value: '1,247', change: '+12.5%', icon: FileText, color: 'blue' },
+    { label: 'Deposit Conversion', value: '24.3%', change: '+3.1%', icon: Percent, color: 'green' },
+    { label: 'Avg Quote Value', value: '$76', change: '+8.2%', icon: DollarSign, color: 'blue' },
+    { label: 'Deposits via LawnPricing', value: '$34,280', change: '+18.2%', icon: DollarSign, color: 'green' },
   ];
 
   const recentQuotes: Quote[] = [
@@ -31,19 +41,75 @@ export default function Dashboard() {
     { id: '5', address: '654 Birch Ln', customer: 'Tom Wilson', service: 'Bi-weekly Mowing', amount: 85, status: 'accepted', date: '2024-02-12', lawnsqft: 9500, plan: 'Premium' },
   ];
 
-  const chartData = [
-    { month: 'Jan', quotes: 180, deposits: 42 },
-    { month: 'Feb', quotes: 220, deposits: 58 },
-    { month: 'Mar', quotes: 195, deposits: 51 },
-    { month: 'Apr', quotes: 240, deposits: 65 },
-    { month: 'May', quotes: 280, deposits: 78 },
-    { month: 'Jun', quotes: 310, deposits: 89 },
-  ];
+  const chartData = {
+    '7d': [
+      { label: 'Mon', value: 42 },
+      { label: 'Tue', value: 38 },
+      { label: 'Wed', value: 51 },
+      { label: 'Thu', value: 45 },
+      { label: 'Fri', value: 58 },
+      { label: 'Sat', value: 32 },
+      { label: 'Sun', value: 28 },
+    ],
+    '30d': [
+      { label: 'Week 1', value: 180 },
+      { label: 'Week 2', value: 220 },
+      { label: 'Week 3', value: 195 },
+      { label: 'Week 4', value: 240 },
+    ],
+    '90d': [
+      { label: 'Jan', value: 180 },
+      { label: 'Feb', value: 220 },
+      { label: 'Mar', value: 195 },
+    ],
+  };
 
-  const maxValue = Math.max(...chartData.flatMap(d => [d.quotes, d.deposits]));
+  const currentChartData = chartData[timeRange];
+  const maxValue = Math.max(...currentChartData.map(d => d.value));
+
+  const totalQuotes = 1247;
+  const depositsPaid = 303;
+  const conversionRate = ((depositsPaid / totalQuotes) * 100).toFixed(1);
+
+  if (!hasServices || !hasQuotes) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-sm md:text-base text-gray-600">Overview of your pricing engine performance</p>
+        </div>
+
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-green-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Let's generate your first quote.</h2>
+            <p className="text-gray-600 mb-6">Set up your service pricing and publish your instant quote widget.</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => onNavigate?.('pricing')}
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <Settings className="w-5 h-5" />
+                Configure Services
+              </button>
+              <button
+                onClick={() => onNavigate?.('quotes')}
+                className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Create Manual Quote
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8">
         <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
         <p className="text-sm md:text-base text-gray-600">Overview of your pricing engine performance</p>
@@ -71,32 +137,86 @@ export default function Dashboard() {
         })}
       </div>
 
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => onNavigate?.('quotes')}
+            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Create Quote
+          </button>
+          <button
+            onClick={() => onNavigate?.('quotes')}
+            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
+          >
+            <Eye className="w-5 h-5" />
+            View Pending Quotes
+          </button>
+        </div>
+      </div>
+
+      {/* Funnel Visualization */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
+        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4">Quote Funnel (30d)</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Quotes Created</p>
+              <p className="text-2xl font-bold text-gray-900">{totalQuotes.toLocaleString()}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-medium text-gray-900">Deposits Paid</p>
+              <p className="text-2xl font-bold text-green-600">{depositsPaid.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="relative">
+            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500 rounded-full transition-all duration-500"
+                style={{ width: `${conversionRate}%` }}
+              />
+            </div>
+            <div className="mt-2 text-center">
+              <span className="text-sm font-semibold text-gray-900">{conversionRate}% Conversion Rate</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-6">Quotes vs Deposits</h2>
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <h2 className="text-base md:text-lg font-semibold text-gray-900">Quotes Over Time</h2>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              {(['7d', '30d', '90d'] as TimeRange[]).map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range)}
+                  className={`px-2 md:px-3 py-1 text-xs md:text-sm font-medium rounded transition-colors ${
+                    timeRange === range
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {range === '7d' ? '7d' : range === '30d' ? '30d' : '90d'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-4">
-            {chartData.map((data) => (
-              <div key={data.month}>
+            {currentChartData.map((data) => (
+              <div key={data.label}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">{data.month}</span>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-gray-500">Quotes: {data.quotes}</span>
-                    <span className="text-xs text-green-600 font-medium">Deposits: {data.deposits}</span>
-                  </div>
+                  <span className="text-sm font-medium text-gray-700">{data.label}</span>
+                  <span className="text-sm text-gray-900 font-semibold">{data.value}</span>
                 </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(data.quotes / maxValue) * 100}%` }}
-                    />
-                  </div>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                    <div
-                      className="bg-green-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(data.deposits / maxValue) * 100}%` }}
-                    />
-                  </div>
+                <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${(data.value / maxValue) * 100}%` }}
+                  />
                 </div>
               </div>
             ))}
@@ -108,22 +228,15 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="flex items-center justify-between p-3 md:p-4 bg-gray-50 rounded-lg">
               <div>
-                <p className="text-xs md:text-sm font-medium text-gray-900">Average Quote Value</p>
+                <p className="text-xs md:text-sm font-medium text-gray-900">Avg Quote Value</p>
                 <p className="text-xs text-gray-500">Last 30 days</p>
               </div>
               <p className="text-xl md:text-2xl font-bold text-gray-900">$76</p>
             </div>
-            <div className="flex items-center justify-between p-3 md:p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-900">Average Response Time</p>
-                <p className="text-xs text-gray-500">From quote to decision</p>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">2.4h</p>
-            </div>
             <div className="flex items-center justify-between p-3 md:p-4 bg-green-50 rounded-lg border border-green-200">
               <div>
-                <p className="text-xs md:text-sm font-medium text-green-900">Revenue This Month</p>
-                <p className="text-xs text-green-600">From deposits</p>
+                <p className="text-xs md:text-sm font-medium text-green-900">Deposits via LawnPricing</p>
+                <p className="text-xs text-green-600">This month</p>
               </div>
               <p className="text-xl md:text-2xl font-bold text-green-700">$8,920</p>
             </div>
@@ -189,13 +302,14 @@ export default function Dashboard() {
             <div
               key={quote.id}
               onClick={() => setSelectedQuote(quote)}
-              className="p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+              className={`relative p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer border-l-4 ${
+                quote.status === 'paid' ? 'border-green-500' :
+                quote.status === 'accepted' ? 'border-blue-500' :
+                quote.status === 'pending' ? 'border-gray-300' :
+                'border-red-500'
+              }`}
             >
               <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{quote.customer}</p>
-                  <p className="text-sm text-gray-600">{quote.address}</p>
-                </div>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                   quote.status === 'paid' ? 'bg-green-100 text-green-800' :
                   quote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
@@ -203,10 +317,12 @@ export default function Dashboard() {
                 }`}>
                   {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
                 </span>
+                <span className="text-lg font-bold text-gray-900">${quote.amount}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{quote.service}</span>
-                <span className="font-semibold text-gray-900">${quote.amount}</span>
+              <p className="text-sm font-semibold text-gray-900 mb-1">{quote.address}</p>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>{quote.plan}</span>
+                <span>{quote.date}</span>
               </div>
             </div>
           ))}
@@ -219,10 +335,12 @@ export default function Dashboard() {
             className="fixed inset-0 bg-gray-600 bg-opacity-50 z-40"
             onClick={() => setSelectedQuote(null)}
           />
-          <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-xl z-50 overflow-y-auto">
-            <div className="p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4 md:mb-6">
-                <h3 className="text-base md:text-lg font-semibold text-gray-900">Quote Details</h3>
+
+          {/* Desktop: Right slideout */}
+          <div className="hidden md:block fixed inset-y-0 right-0 w-96 bg-white shadow-xl z-50 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Quote Details</h3>
                 <button
                   onClick={() => setSelectedQuote(null)}
                   className="text-gray-400 hover:text-gray-600 p-2 -m-2"
@@ -231,7 +349,7 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              <div className="space-y-4 md:space-y-6">
+              <div className="space-y-6">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Customer</p>
                   <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
@@ -278,12 +396,82 @@ export default function Dashboard() {
                   <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
                 </div>
 
-                <div className="pt-4 md:pt-6 border-t border-gray-200">
-                  <button className="w-full px-4 py-3 md:py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm md:text-base">
+                <div className="pt-6 border-t border-gray-200">
+                  <button className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
                     Send Follow-up
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Mobile: Bottom sheet */}
+          <div className="md:hidden fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl z-50 max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
+              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Quote Details</h3>
+                <button
+                  onClick={() => setSelectedQuote(null)}
+                  className="text-gray-400 hover:text-gray-600 p-2 -m-2"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-5">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Customer</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Property Address</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.address}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Lawn Size</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.lawnsqft.toLocaleString()} sq ft</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Service Plan</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.plan}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Service Type</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.service}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Quote Amount</p>
+                <p className="text-2xl font-bold text-gray-900">${selectedQuote.amount}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Status</p>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedQuote.status === 'paid' ? 'bg-green-100 text-green-800' :
+                  selectedQuote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {selectedQuote.status.charAt(0).toUpperCase() + selectedQuote.status.slice(1)}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Date Created</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4">
+              <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-medium">
+                Send Follow-up
+              </button>
             </div>
           </div>
         </>

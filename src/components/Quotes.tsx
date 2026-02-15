@@ -23,6 +23,7 @@ export default function Quotes() {
   const [quickQuoteStep, setQuickQuoteStep] = useState<QuickQuoteStep>(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const quotes: Quote[] = [
     { id: '1', address: '123 Maple St', customer: 'John Smith', email: 'john@email.com', phone: '555-0101', service: 'Weekly Mowing', amount: 55, status: 'paid', date: '2024-02-14', lawnsqft: 5200, plan: 'Standard' },
@@ -203,7 +204,7 @@ export default function Quotes() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Quotes</h1>
@@ -223,7 +224,64 @@ export default function Quotes() {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div className="p-4 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+          {/* Mobile: Search + Advanced Filter Button */}
+          <div className="md:hidden space-y-3">
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <button
+                onClick={() => setShowFilters(true)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg flex items-center gap-2 hover:bg-gray-50 transition-colors"
+              >
+                <Filter className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Quick Filter Tabs */}
+            <div className="flex gap-2 overflow-x-auto">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  statusFilter === 'all'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setStatusFilter('pending')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  statusFilter === 'pending'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Pending
+              </button>
+              <button
+                onClick={() => setStatusFilter('paid')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  statusFilter === 'paid'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Paid
+              </button>
+            </div>
+          </div>
+
+          {/* Desktop: Search + Filter Inline */}
+          <div className="hidden md:flex gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -231,7 +289,7 @@ export default function Quotes() {
                 placeholder="Search by customer or address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -239,7 +297,7 @@ export default function Quotes() {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="flex-1 sm:flex-none px-4 py-2.5 md:py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 <option value="all">All Status</option>
                 <option value="pending">Pending</option>
@@ -310,13 +368,14 @@ export default function Quotes() {
             <div
               key={quote.id}
               onClick={() => setSelectedQuote(quote)}
-              className="p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+              className={`relative p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer border-l-4 ${
+                quote.status === 'paid' ? 'border-green-500' :
+                quote.status === 'accepted' ? 'border-blue-500' :
+                quote.status === 'pending' ? 'border-gray-300' :
+                'border-red-500'
+              }`}
             >
               <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-gray-900">{quote.customer}</p>
-                  <p className="text-sm text-gray-600">{quote.address}</p>
-                </div>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                   quote.status === 'paid' ? 'bg-green-100 text-green-800' :
                   quote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
@@ -325,12 +384,13 @@ export default function Quotes() {
                 }`}>
                   {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
                 </span>
+                <span className="text-lg font-bold text-gray-900">${quote.amount}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">{quote.service}</span>
-                <span className="font-semibold text-gray-900">${quote.amount}</span>
+              <p className="text-sm font-semibold text-gray-900 mb-1">{quote.address}</p>
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>{quote.plan}</span>
+                <span>{quote.date}</span>
               </div>
-              <div className="mt-2 text-xs text-gray-500">{quote.date}</div>
             </div>
           ))}
         </div>
@@ -342,10 +402,12 @@ export default function Quotes() {
             className="fixed inset-0 bg-gray-600 bg-opacity-50 z-40"
             onClick={() => setSelectedQuote(null)}
           />
-          <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-xl z-50 overflow-y-auto">
-            <div className="p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4 md:mb-6">
-                <h3 className="text-base md:text-lg font-semibold text-gray-900">Quote Details</h3>
+
+          {/* Desktop: Right slideout */}
+          <div className="hidden md:block fixed inset-y-0 right-0 w-96 bg-white shadow-xl z-50 overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Quote Details</h3>
                 <button
                   onClick={() => setSelectedQuote(null)}
                   className="text-gray-400 hover:text-gray-600 p-2 -m-2"
@@ -354,7 +416,7 @@ export default function Quotes() {
                 </button>
               </div>
 
-              <div className="space-y-4 md:space-y-6">
+              <div className="space-y-6">
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Customer</p>
                   <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
@@ -404,15 +466,141 @@ export default function Quotes() {
                   <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
                 </div>
 
-                <div className="pt-4 md:pt-6 border-t border-gray-200 space-y-3">
-                  <button className="w-full px-4 py-3 md:py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm md:text-base">
+                <div className="pt-6 border-t border-gray-200 space-y-3">
+                  <button className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
                     Send Reminder
                   </button>
-                  <button className="w-full px-4 py-3 md:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm md:text-base">
+                  <button className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                     View Customer Portal
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Mobile: Bottom sheet */}
+          <div className="md:hidden fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl z-50 max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
+              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Quote Details</h3>
+                <button
+                  onClick={() => setSelectedQuote(null)}
+                  className="text-gray-400 hover:text-gray-600 p-2 -m-2"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-5">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Customer</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.customer}</p>
+                <p className="text-sm text-gray-600">{selectedQuote.email}</p>
+                <p className="text-sm text-gray-600">{selectedQuote.phone}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Property Address</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.address}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Lawn Size</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.lawnsqft.toLocaleString()} sq ft</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Service Plan</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.plan}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Service Type</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.service}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Quote Amount</p>
+                <p className="text-2xl font-bold text-gray-900">${selectedQuote.amount}</p>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Status</p>
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  selectedQuote.status === 'paid' ? 'bg-green-100 text-green-800' :
+                  selectedQuote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
+                  selectedQuote.status === 'declined' ? 'bg-red-100 text-red-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {selectedQuote.status.charAt(0).toUpperCase() + selectedQuote.status.slice(1)}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-500 mb-1">Date Created</p>
+                <p className="text-base font-medium text-gray-900">{selectedQuote.date}</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 space-y-3">
+              <button className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-medium">
+                Send Reminder
+              </button>
+              <button className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors font-medium">
+                View Customer Portal
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Filter Bottom Sheet (Mobile) */}
+      {showFilters && (
+        <>
+          <div
+            className="fixed inset-0 bg-gray-600 bg-opacity-50 z-40 md:hidden"
+            onClick={() => setShowFilters(false)}
+          />
+          <div className="md:hidden fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl z-50">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3">
+              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="text-gray-400 hover:text-gray-600 p-2 -m-2"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="paid">Paid</option>
+                  <option value="declined">Declined</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4">
+              <button
+                onClick={() => setShowFilters(false)}
+                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-colors font-medium"
+              >
+                Apply Filters
+              </button>
             </div>
           </div>
         </>

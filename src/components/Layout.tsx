@@ -1,4 +1,4 @@
-import { Home, Zap, DollarSign, FileText, BarChart3, Code, CreditCard, Megaphone, Menu, X } from 'lucide-react';
+import { Home, Zap, DollarSign, FileText, BarChart3, Code, CreditCard, Megaphone, Menu, X, MoreHorizontal } from 'lucide-react';
 import { useState, ReactNode } from 'react';
 
 interface LayoutProps {
@@ -118,6 +118,79 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           onClick={() => setSidebarOpen(false)}
         />
       )}
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-inset-bottom">
+        <div className="grid grid-cols-5 h-16">
+          <button
+            onClick={() => {
+              onNavigate('dashboard');
+              setSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              currentPage === 'dashboard'
+                ? 'text-green-600'
+                : 'text-gray-500 active:text-gray-700'
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span className="text-xs font-medium">Home</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('quotes');
+              setSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              currentPage === 'quotes'
+                ? 'text-green-600'
+                : 'text-gray-500 active:text-gray-700'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="text-xs font-medium">Quotes</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('pricing');
+              setSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              currentPage === 'pricing'
+                ? 'text-green-600'
+                : 'text-gray-500 active:text-gray-700'
+            }`}
+          >
+            <DollarSign className="w-5 h-5" />
+            <span className="text-xs font-medium">Services</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate('embed');
+              setSidebarOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              currentPage === 'embed'
+                ? 'text-green-600'
+                : 'text-gray-500 active:text-gray-700'
+            }`}
+          >
+            <Code className="w-5 h-5" />
+            <span className="text-xs font-medium">Embed</span>
+          </button>
+
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 text-gray-500 active:text-gray-700 transition-colors"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+            <span className="text-xs font-medium">More</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }
