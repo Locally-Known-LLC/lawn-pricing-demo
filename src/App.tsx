@@ -3,7 +3,7 @@ import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import Services from './components/Services';
 import Quotes from './components/Quotes';
-import Embed from './components/Embed';
+import Widget from './components/Widget';
 import Integrations from './components/Integrations';
 import GrowthSuiteHome from './components/GrowthSuiteHome';
 import UploadAddresses from './components/campaign/UploadAddresses';
@@ -12,7 +12,7 @@ import DoorHangerBuilder from './components/campaign/DoorHangerBuilder';
 import PrintOptions from './components/campaign/PrintOptions';
 import CampaignAnalytics from './components/CampaignAnalytics';
 
-type Page = 'dashboard' | 'quick-quote' | 'pricing' | 'quotes' | 'analytics' | 'embed' | 'billing' | 'growth' | 'campaign-upload' | 'campaign-service' | 'campaign-builder' | 'campaign-print' | 'campaign-analytics';
+type Page = 'dashboard' | 'quick-quote' | 'pricing' | 'quotes' | 'analytics' | 'widget' | 'billing' | 'growth' | 'campaign-upload' | 'campaign-service' | 'campaign-builder' | 'campaign-print' | 'campaign-analytics';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
@@ -39,8 +39,8 @@ function App() {
         return <Services />;
       case 'quotes':
         return <Quotes />;
-      case 'embed':
-        return <Embed />;
+      case 'widget':
+        return <Widget />;
       case 'analytics':
         return <Integrations />;
       case 'growth':

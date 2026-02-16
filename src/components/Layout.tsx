@@ -1,4 +1,4 @@
-import { Home, Zap, DollarSign, FileText, BarChart3, Code, CreditCard, Megaphone, Menu, X, MoreHorizontal } from 'lucide-react';
+import { Home, Zap, DollarSign, FileText, BarChart3, Layers, CreditCard, Megaphone, Menu, X, MoreHorizontal } from 'lucide-react';
 import { useState, ReactNode } from 'react';
 
 interface LayoutProps {
@@ -16,7 +16,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
     { id: 'pricing', label: 'Services', icon: DollarSign },
     { id: 'quotes', label: 'Quotes', icon: FileText },
     { id: 'analytics', label: 'Integrations', icon: BarChart3 },
-    { id: 'embed', label: 'Embed / API', icon: Code },
+    { id: 'widget', label: 'Widget', icon: Layers },
     { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
@@ -169,17 +169,17 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
           <button
             onClick={() => {
-              onNavigate('embed');
+              onNavigate('widget');
               setSidebarOpen(false);
             }}
             className={`flex flex-col items-center justify-center gap-1 transition-colors ${
-              currentPage === 'embed'
+              currentPage === 'widget'
                 ? 'text-green-600'
                 : 'text-gray-500 active:text-gray-700'
             }`}
           >
-            <Code className="w-5 h-5" />
-            <span className="text-xs font-medium">Embed</span>
+            <Layers className="w-5 h-5" />
+            <span className="text-xs font-medium">Widget</span>
           </button>
 
           <button
