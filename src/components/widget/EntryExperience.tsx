@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { Monitor, MessageSquare, PanelRightOpen, MousePointer } from 'lucide-react';
-import type { DisplayType, EntryConfig } from './types';
+import { Monitor, MessageSquare, PanelRightOpen, MousePointer, AlertCircle } from 'lucide-react';
+import type { DisplayType, EntryConfig, Service } from './types';
 
 interface Props {
   displayType: DisplayType;
   config: EntryConfig;
+  services: Service[];
+  linkedServiceId: string | null;
+  linkedServiceStatus: 'draft' | 'live' | null;
   onDisplayTypeChange: (type: DisplayType) => void;
   onConfigChange: (config: EntryConfig) => void;
+  onServiceChange: (serviceId: string, serviceName: string, serviceStatus: 'draft' | 'live') => void;
+  onCreateService: () => void;
 }
 
 const DISPLAY_OPTIONS: { value: DisplayType; label: string; icon: typeof Monitor }[] = [
@@ -35,17 +40,76 @@ const MICROCOPY: Record<string, { text: string; url: string }> = {
   },
 };
 
-export default function EntryExperience({ displayType, config, onDisplayTypeChange, onConfigChange }: Props) {
+export default function EntryExperience({ displayType, config, services, linkedServiceId, linkedServiceStatus, onDisplayTypeChange, onConfigChange, onServiceChange, onCreateService }: Props) {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const handleFocus = (field: string) => setFocusedField(field);
   const handleBlur = () => setTimeout(() => setFocusedField(null), 150);
+
+  const selectedService = services.find(s => s.id === linkedServiceId);
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">Entry Experience</h2>
         <p className="text-sm text-gray-600">Configure how visitors first see your pricing widget</p>
+      </div>
+
+      <div className="pb-6 border-b border-gray-200">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Service Used for Pricing <span className="text-red-500">*</span>
+        </label>
+        {services.length === 0 ? (
+          <div className="border-2 border-yellow-200 bg-yellow-50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-yellow-900 mb-1">No Services Available</p>
+                <p className="text-sm text-yellow-700 mb-3">
+                  You must create and publish a Service before activating a Widget.
+                </p>
+                <button
+                  onClick={onCreateService}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium text-sm"
+                >
+                  Create Service
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <select
+              value={linkedServiceId || ''}
+              onChange={(e) => {
+                const service = services.find(s => s.id === e.target.value);
+                if (service) {
+                  onServiceChange(service.id, service.name, service.status);
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="">Select a service...</option>
+              {services.map(service => (
+                <option key={service.id} value={service.id}>
+                  {service.name} ({service.status === 'live' ? 'Live' : 'Draft'})
+                </option>
+              ))}
+            </select>
+            {selectedService && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  selectedService.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {selectedService.status === 'live' ? 'Live' : 'Draft'}
+                </span>
+                {selectedService.status === 'draft' && (
+                  <p className="text-xs text-gray-500">This service must be published before the widget can go live</p>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div>

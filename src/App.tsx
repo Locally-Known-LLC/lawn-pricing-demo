@@ -40,7 +40,7 @@ function App() {
       case 'quotes':
         return <Quotes />;
       case 'widget':
-        return <Widget />;
+        return <Widget onNavigate={handleNavigate} />;
       case 'analytics':
         return <Integrations />;
       case 'growth':

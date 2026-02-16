@@ -8,6 +8,12 @@ export type ButtonStyleOption = 'solid' | 'outline';
 export type InstallPlatform = 'wordpress' | 'wix' | 'webflow' | 'custom';
 export type WidgetStep = 1 | 2 | 3 | 4 | 5;
 
+export interface Service {
+  id: string;
+  name: string;
+  status: 'draft' | 'live';
+}
+
 export interface EntryConfig {
   addressPlaceholder: string;
   buttonText: string;
@@ -38,8 +44,10 @@ export interface WidgetVariant {
   id: string;
   name: string;
   status: WidgetStatus;
+  hasUnpublishedChanges: boolean;
   linkedServiceId: string | null;
   linkedServiceName: string | null;
+  linkedServiceStatus: 'draft' | 'live' | null;
   displayType: DisplayType;
   installStatus: InstallStatus;
   entryConfig: EntryConfig;
@@ -47,6 +55,7 @@ export interface WidgetVariant {
   conversionConfig: ConversionConfig;
   stylingConfig: StylingConfig;
   installPlatform: InstallPlatform | null;
+  originalLiveState?: WidgetVariant;
 }
 
 export const DEFAULT_ENTRY_CONFIG: EntryConfig = {
@@ -106,8 +115,10 @@ export function createDefaultVariant(id: string, name: string): WidgetVariant {
     id,
     name,
     status: 'draft',
+    hasUnpublishedChanges: false,
     linkedServiceId: null,
     linkedServiceName: null,
+    linkedServiceStatus: null,
     displayType: 'inline',
     installStatus: 'not_installed',
     entryConfig: { ...DEFAULT_ENTRY_CONFIG },
@@ -116,4 +127,17 @@ export function createDefaultVariant(id: string, name: string): WidgetVariant {
     stylingConfig: { ...DEFAULT_STYLING_CONFIG },
     installPlatform: null,
   };
+}
+
+export function canPublishVariant(variant: WidgetVariant): { canPublish: boolean; reason?: string } {
+  if (!variant.linkedServiceId) {
+    return { canPublish: false, reason: 'You must select a service to use for pricing' };
+  }
+  if (variant.linkedServiceStatus !== 'live') {
+    return { canPublish: false, reason: 'The linked service must be published (Live) before this widget can go live' };
+  }
+  if (variant.leadCaptureConfig.timing !== 'disabled' && !variant.leadCaptureConfig.emailEnabled) {
+    return { canPublish: false, reason: 'Email must be enabled when lead capture is active' };
+  }
+  return { canPublish: true };
 }

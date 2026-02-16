@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Circle, CheckCircle2, Layers } from 'lucide-react';
+import { Plus, Circle, CheckCircle2, Layers, AlertTriangle } from 'lucide-react';
 import WidgetConfigurator from './widget/WidgetConfigurator';
 import {
   type WidgetVariant,
+  type Service,
   DISPLAY_TYPE_LABELS,
   LEAD_CAPTURE_MODE_LABELS,
   getLeadCaptureMode,
@@ -11,11 +12,26 @@ import {
 
 const MAX_VARIANTS = 5;
 
-export default function Widget() {
+const MOCK_SERVICES: Service[] = [
+  { id: 'service-1', name: 'Lawn Mowing Service', status: 'live' },
+  { id: 'service-2', name: 'Garden Maintenance', status: 'draft' },
+];
+
+interface Props {
+  onNavigate?: (page: string) => void;
+}
+
+export default function Widget({ onNavigate }: Props) {
   const [variants, setVariants] = useState<WidgetVariant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
   const selectedVariant = variants.find((v) => v.id === selectedVariantId) || null;
+
+  const handleNavigateToServices = () => {
+    if (onNavigate) {
+      onNavigate('pricing');
+    }
+  };
 
   const handleCreateVariant = () => {
     if (variants.length >= MAX_VARIANTS) return;
@@ -40,8 +56,10 @@ export default function Widget() {
       <div className="max-w-5xl mx-auto pb-20 lg:pb-0">
         <WidgetConfigurator
           variant={selectedVariant}
+          services={MOCK_SERVICES}
           onUpdate={handleUpdateVariant}
           onClose={() => setSelectedVariantId(null)}
+          onNavigateToServices={handleNavigateToServices}
         />
       </div>
     );
@@ -103,6 +121,18 @@ export default function Widget() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {variants.map((variant) => {
           const leadMode = getLeadCaptureMode(variant.leadCaptureConfig);
+          const getStatusLabel = () => {
+            if (variant.status === 'live' && variant.hasUnpublishedChanges) {
+              return 'Draft (Unpublished)';
+            }
+            return variant.status === 'live' ? 'Live' : 'Draft';
+          };
+          const getStatusColor = () => {
+            if (variant.status === 'live' && variant.hasUnpublishedChanges) {
+              return 'bg-yellow-100 text-yellow-800';
+            }
+            return variant.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600';
+          };
           return (
             <div
               key={variant.id}
@@ -114,10 +144,8 @@ export default function Widget() {
                   <h3 className="text-sm font-semibold text-gray-900 group-hover:text-green-700 transition-colors">
                     {variant.name}
                   </h3>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                    variant.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {variant.status === 'live' ? 'Live' : 'Draft'}
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor()}`}>
+                    {getStatusLabel()}
                   </span>
                 </div>
 
@@ -132,7 +160,21 @@ export default function Widget() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Service</span>
-                    <span className="text-gray-900 font-medium">{variant.linkedServiceName || 'Not linked'}</span>
+                    {variant.linkedServiceName ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-900 font-medium">{variant.linkedServiceName}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-xs ${
+                          variant.linkedServiceStatus === 'live' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {variant.linkedServiceStatus === 'live' ? 'Live' : 'Draft'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-yellow-600" />
+                        <span className="text-yellow-700 font-medium">Not configured</span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-500">Install</span>
