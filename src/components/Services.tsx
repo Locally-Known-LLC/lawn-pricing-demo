@@ -1,25 +1,14 @@
-import { ChevronRight, Save, Upload, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Save, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
+import ServiceBasicsStep from './service/ServiceBasicsStep';
+import ServicePlansStep from './service/ServicePlansStep';
+import ServicePricingStep from './service/ServicePricingStep';
+import ServiceAddOnsStep from './service/ServiceAddOnsStep';
+import ServiceDepositPublishStep from './service/ServiceDepositPublishStep';
+import { PricingTier, RecurringAdjustment, calculatePrice, calculateRecurringPrices } from '../utils/pricingEngine';
+import { Addon } from './service/ServiceAddOnsStep';
 
 type Step = 1 | 2 | 3 | 4 | 5;
-
-interface PricingTier {
-  min: number;
-  max: number;
-  price: number;
-}
-
-interface RecurringAdjustment {
-  type: 'percentage' | 'fixed';
-  value: number;
-}
-
-interface Addon {
-  name: string;
-  priceType: 'flat' | 'per_sqft' | 'conditional';
-  price: number;
-  minSqft?: number;
-}
 
 interface ServiceData {
   name: string;
@@ -39,6 +28,8 @@ interface ServiceData {
   depositEnabled: boolean;
   depositAmount: number;
   status: 'draft' | 'live';
+  hasUnpublishedChanges: boolean;
+  originalLiveState?: ServiceData;
 }
 
 export default function Services() {
@@ -73,51 +64,35 @@ export default function Services() {
     depositEnabled: true,
     depositAmount: 50,
     status: 'live',
+    hasUnpublishedChanges: false,
   });
 
-  const validateTiers = () => {
-    const errors: string[] = [];
-    serviceData.pricingTiers.forEach((tier, idx) => {
-      if (tier.min >= tier.max) {
-        errors.push(`Tier ${idx + 1}: Start must be less than end`);
-      }
-      if (idx > 0) {
-        const prevTier = serviceData.pricingTiers[idx - 1];
-        if (tier.min !== prevTier.max + 1) {
-          if (tier.min > prevTier.max + 1) {
-            errors.push(`Gap between tier ${idx} and ${idx + 1}`);
-          } else if (tier.min <= prevTier.max) {
-            errors.push(`Overlap between tier ${idx} and ${idx + 1}`);
-          }
-        }
-      }
+  const handleServiceChange = (updates: Partial<ServiceData>) => {
+    const updatedService = { ...serviceData, ...updates };
+
+    if (serviceData.status === 'live' && !serviceData.hasUnpublishedChanges) {
+      updatedService.hasUnpublishedChanges = true;
+      updatedService.originalLiveState = { ...serviceData };
+    }
+
+    setServiceData(updatedService);
+  };
+
+  const handlePublish = () => {
+    setShowPublishModal(false);
+    setServiceData({
+      ...serviceData,
+      status: 'live',
+      hasUnpublishedChanges: false,
+      originalLiveState: undefined,
     });
-    return errors;
   };
 
-  const calculatePreviewPrice = (sqft: number) => {
-    if (serviceData.pricingModel === 'base_per_sqft') {
-      const calculated = serviceData.basePrice + (sqft * serviceData.perSqftRate);
-      return Math.max(calculated, serviceData.minimumPrice);
-    } else {
-      const tier = serviceData.pricingTiers.find(t => sqft >= t.min && sqft <= t.max);
-      const calculated = tier ? tier.price : serviceData.pricingTiers[serviceData.pricingTiers.length - 1]?.price || 0;
-      return Math.max(calculated, serviceData.minimumPrice);
+  const handleRevertToLive = () => {
+    if (serviceData.originalLiveState) {
+      setServiceData({ ...serviceData.originalLiveState, originalLiveState: undefined });
     }
   };
-
-  const getRecurringPrice = (basePrice: number, frequency: 'weekly' | 'biweekly' | 'monthly') => {
-    const adjustment = serviceData.recurringAdjustments[frequency];
-    if (!adjustment || adjustment.value === 0) return basePrice;
-
-    if (adjustment.type === 'percentage') {
-      return basePrice * (1 - adjustment.value / 100);
-    } else {
-      return basePrice - adjustment.value;
-    }
-  };
-
-  const tierValidationErrors = validateTiers();
 
   const steps = [
     { number: 1, title: 'Basics', subtitle: 'Service details' },
@@ -127,570 +102,88 @@ export default function Services() {
     { number: 5, title: 'Deposit', subtitle: 'Payment terms' },
   ];
 
-  const handlePublish = () => {
-    setShowPublishModal(false);
-    setServiceData({ ...serviceData, status: 'live' });
+  const getStatusLabel = () => {
+    if (serviceData.status === 'live' && serviceData.hasUnpublishedChanges) {
+      return 'Draft (Unpublished Changes)';
+    }
+    return serviceData.status === 'live' ? 'Live' : 'Draft';
+  };
+
+  const getStatusColor = () => {
+    if (serviceData.status === 'live' && serviceData.hasUnpublishedChanges) {
+      return 'bg-yellow-100 text-yellow-800';
+    }
+    return serviceData.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800';
   };
 
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-4 md:space-y-6">
-            <div>
-              <h2 className="text-lg md:text-xl lg:text-2xl font-bold text-gray-900 mb-2">Service Basics</h2>
-              <p className="text-sm md:text-base text-gray-600">Set up your service name and description</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service Name
-              </label>
-              <input
-                type="text"
-                value={serviceData.name}
-                onChange={(e) => setServiceData({ ...serviceData, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                value={serviceData.description}
-                onChange={(e) => setServiceData({ ...serviceData, description: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
-              <p className="text-sm text-gray-500 mt-2">This will appear on your customer-facing quote page</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Service Image
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-green-400 transition-colors cursor-pointer">
-                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600">Upload a service image</p>
-              </div>
-            </div>
-          </div>
+          <ServiceBasicsStep
+            name={serviceData.name}
+            description={serviceData.description}
+            onNameChange={(name) => handleServiceChange({ name })}
+            onDescriptionChange={(description) => handleServiceChange({ description })}
+          />
         );
 
       case 2:
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Service Plans</h2>
-              <p className="text-gray-600">Create different pricing tiers for your customers</p>
-            </div>
-
-            <div className="space-y-4">
-              {serviceData.plans.map((plan, idx) => (
-                <div key={idx} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Plan Name
-                      </label>
-                      <input
-                        type="text"
-                        value={plan.name}
-                        onChange={(e) => {
-                          const newPlans = [...serviceData.plans];
-                          newPlans[idx].name = e.target.value;
-                          setServiceData({ ...serviceData, plans: newPlans });
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Base Price
-                      </label>
-                      <input
-                        type="number"
-                        value={plan.price}
-                        onChange={(e) => {
-                          const newPlans = [...serviceData.plans];
-                          newPlans[idx].price = parseInt(e.target.value);
-                          setServiceData({ ...serviceData, plans: newPlans });
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Frequency
-                      </label>
-                      <select
-                        value={plan.frequency}
-                        onChange={(e) => {
-                          const newPlans = [...serviceData.plans];
-                          newPlans[idx].frequency = e.target.value;
-                          setServiceData({ ...serviceData, plans: newPlans });
-                        }}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      >
-                        <option>Weekly</option>
-                        <option>Bi-weekly</option>
-                        <option>Monthly</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button className="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-green-400 hover:text-green-600 transition-colors font-medium">
-              + Add Another Plan
-            </button>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-blue-800">
-                Plans will be automatically adjusted based on property size using your pricing engine
-              </p>
-            </div>
-          </div>
+          <ServicePlansStep
+            plans={serviceData.plans}
+            onPlansChange={(plans) => handleServiceChange({ plans })}
+          />
         );
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Pricing Configuration</h2>
-              <p className="text-gray-600">Set pricing rules based on property size</p>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-3">Pricing Model</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="pricingModel"
-                    value="tiered"
-                    checked={serviceData.pricingModel === 'tiered'}
-                    onChange={(e) => setServiceData({ ...serviceData, pricingModel: e.target.value as 'tiered' | 'base_per_sqft' })}
-                    className="w-4 h-4 text-green-600"
-                  />
-                  <span className="text-sm text-gray-700">Tiered</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="pricingModel"
-                    value="base_per_sqft"
-                    checked={serviceData.pricingModel === 'base_per_sqft'}
-                    onChange={(e) => setServiceData({ ...serviceData, pricingModel: e.target.value as 'tiered' | 'base_per_sqft' })}
-                    className="w-4 h-4 text-green-600"
-                  />
-                  <span className="text-sm text-gray-700">Base + Per SqFt</span>
-                </label>
-              </div>
-            </div>
-
-            {serviceData.pricingModel === 'base_per_sqft' ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Base Price ($)
-                    </label>
-                    <input
-                      type="number"
-                      value={serviceData.basePrice}
-                      onChange={(e) => setServiceData({ ...serviceData, basePrice: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="35"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Per SqFt Rate ($)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={serviceData.perSqftRate}
-                      onChange={(e) => setServiceData({ ...serviceData, perSqftRate: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="0.008"
-                    />
-                  </div>
-                </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
-                    Example: For a 6,000 sqft property: ${serviceData.basePrice} + (6,000 × ${serviceData.perSqftRate}) = ${(serviceData.basePrice + (6000 * serviceData.perSqftRate)).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Square Footage Tiers
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">Ranges must cover all square footage without gaps or overlap.</p>
-
-                  {tierValidationErrors.length > 0 && (
-                    <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                      {tierValidationErrors.map((error, idx) => (
-                        <p key={idx} className="text-xs text-red-700">{error}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  {serviceData.pricingTiers.map((tier, idx) => (
-                    <div key={idx} className={`p-4 bg-gray-50 rounded-lg border mb-3 ${
-                      tierValidationErrors.some(e => e.includes(`Tier ${idx + 1}`) || e.includes(`tier ${idx}`) || e.includes(`tier ${idx + 1}`))
-                        ? 'border-red-300 bg-red-50'
-                        : 'border-gray-200'
-                    }`}>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Min SqFt
-                          </label>
-                          <input
-                            type="number"
-                            value={tier.min}
-                            onChange={(e) => {
-                              const newTiers = [...serviceData.pricingTiers];
-                              newTiers[idx].min = parseInt(e.target.value) || 0;
-                              setServiceData({ ...serviceData, pricingTiers: newTiers });
-                            }}
-                            disabled={idx === 0}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Max SqFt
-                          </label>
-                          <input
-                            type="number"
-                            value={tier.max}
-                            onChange={(e) => {
-                              const newTiers = [...serviceData.pricingTiers];
-                              const newMax = parseInt(e.target.value) || 0;
-                              newTiers[idx].max = newMax;
-
-                              if (idx < newTiers.length - 1) {
-                                newTiers[idx + 1].min = newMax + 1;
-                              }
-
-                              setServiceData({ ...serviceData, pricingTiers: newTiers });
-                            }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="flex-1">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Price ($)
-                            </label>
-                            <input
-                              type="number"
-                              value={tier.price}
-                              onChange={(e) => {
-                                const newTiers = [...serviceData.pricingTiers];
-                                newTiers[idx].price = parseFloat(e.target.value) || 0;
-                                setServiceData({ ...serviceData, pricingTiers: newTiers });
-                              }}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                            />
-                          </div>
-                          {serviceData.pricingTiers.length > 1 && (
-                            <button
-                              onClick={() => {
-                                const newTiers = serviceData.pricingTiers.filter((_, i) => i !== idx);
-                                if (idx < newTiers.length && idx > 0) {
-                                  newTiers[idx].min = newTiers[idx - 1].max + 1;
-                                }
-                                setServiceData({ ...serviceData, pricingTiers: newTiers });
-                              }}
-                              className="mt-auto px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete tier"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => {
-                      const lastTier = serviceData.pricingTiers[serviceData.pricingTiers.length - 1];
-                      const newTier = { min: lastTier ? lastTier.max + 1 : 0, max: lastTier ? lastTier.max + 5000 : 5000, price: 0 };
-                      setServiceData({ ...serviceData, pricingTiers: [...serviceData.pricingTiers, newTier] });
-                    }}
-                    className="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-green-400 hover:text-green-600 transition-colors font-medium flex items-center justify-center gap-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Tier
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4 pt-4 border-t border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Minimum Price Floor ($)
-                </label>
-                <input
-                  type="number"
-                  value={serviceData.minimumPrice}
-                  onChange={(e) => setServiceData({ ...serviceData, minimumPrice: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="50"
-                />
-                <p className="text-sm text-gray-500 mt-2">Protects small properties from underpricing</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Recurring Frequency Adjustments
-              </label>
-
-              {['weekly', 'biweekly', 'monthly'].map((freq) => (
-                <div key={freq} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="flex items-center">
-                      <p className="font-medium text-gray-900 capitalize">{freq === 'biweekly' ? 'Bi-weekly' : freq}</p>
-                    </div>
-                    <div>
-                      <select
-                        value={serviceData.recurringAdjustments[freq as keyof typeof serviceData.recurringAdjustments]?.type || 'percentage'}
-                        onChange={(e) => {
-                          const current = serviceData.recurringAdjustments[freq as keyof typeof serviceData.recurringAdjustments];
-                          setServiceData({
-                            ...serviceData,
-                            recurringAdjustments: {
-                              ...serviceData.recurringAdjustments,
-                              [freq]: { type: e.target.value as 'percentage' | 'fixed', value: current?.value || 0 }
-                            }
-                          });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                      >
-                        <option value="percentage">Percentage</option>
-                        <option value="fixed">Fixed Amount</option>
-                      </select>
-                    </div>
-                    <div>
-                      <input
-                        type="number"
-                        value={serviceData.recurringAdjustments[freq as keyof typeof serviceData.recurringAdjustments]?.value || 0}
-                        onChange={(e) => {
-                          const current = serviceData.recurringAdjustments[freq as keyof typeof serviceData.recurringAdjustments];
-                          setServiceData({
-                            ...serviceData,
-                            recurringAdjustments: {
-                              ...serviceData.recurringAdjustments,
-                              [freq]: { type: current?.type || 'percentage', value: parseFloat(e.target.value) || 0 }
-                            }
-                          });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
-                        placeholder={serviceData.recurringAdjustments[freq as keyof typeof serviceData.recurringAdjustments]?.type === 'percentage' ? '5' : '10'}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  Apply discounts or adjustments for recurring service frequencies
-                </p>
-              </div>
-            </div>
-          </div>
+          <ServicePricingStep
+            pricingModel={serviceData.pricingModel}
+            basePrice={serviceData.basePrice}
+            perSqftRate={serviceData.perSqftRate}
+            pricingTiers={serviceData.pricingTiers}
+            minimumPrice={serviceData.minimumPrice}
+            recurringAdjustments={serviceData.recurringAdjustments}
+            onPricingModelChange={(pricingModel) => handleServiceChange({ pricingModel })}
+            onBasePriceChange={(basePrice) => handleServiceChange({ basePrice })}
+            onPerSqftRateChange={(perSqftRate) => handleServiceChange({ perSqftRate })}
+            onPricingTiersChange={(pricingTiers) => handleServiceChange({ pricingTiers })}
+            onMinimumPriceChange={(minimumPrice) => handleServiceChange({ minimumPrice })}
+            onRecurringAdjustmentsChange={(recurringAdjustments) => handleServiceChange({ recurringAdjustments })}
+          />
         );
 
       case 4:
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Add-on Services</h2>
-              <p className="text-gray-600">Optional extras customers can add to their quote</p>
-            </div>
-
-            <div className="space-y-4">
-              {serviceData.addons.map((addon, idx) => (
-                <div key={idx} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Add-on Name
-                        </label>
-                        <input
-                          type="text"
-                          value={addon.name}
-                          onChange={(e) => {
-                            const newAddons = [...serviceData.addons];
-                            newAddons[idx].name = e.target.value;
-                            setServiceData({ ...serviceData, addons: newAddons });
-                          }}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Price Type
-                        </label>
-                        <select
-                          value={addon.priceType}
-                          onChange={(e) => {
-                            const newAddons = [...serviceData.addons];
-                            newAddons[idx].priceType = e.target.value as 'flat' | 'per_sqft' | 'conditional';
-                            setServiceData({ ...serviceData, addons: newAddons });
-                          }}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        >
-                          <option value="flat">Flat Price</option>
-                          <option value="per_sqft">Per SqFt</option>
-                          <option value="conditional">Conditional</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {addon.priceType === 'per_sqft' ? 'Price per SqFt ($)' : 'Price ($)'}
-                        </label>
-                        <input
-                          type="number"
-                          step={addon.priceType === 'per_sqft' ? '0.001' : '1'}
-                          value={addon.price}
-                          onChange={(e) => {
-                            const newAddons = [...serviceData.addons];
-                            newAddons[idx].price = parseFloat(e.target.value) || 0;
-                            setServiceData({ ...serviceData, addons: newAddons });
-                          }}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      {addon.priceType === 'conditional' && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Min SqFt Required
-                          </label>
-                          <input
-                            type="number"
-                            value={addon.minSqft || ''}
-                            onChange={(e) => {
-                              const newAddons = [...serviceData.addons];
-                              newAddons[idx].minSqft = parseInt(e.target.value) || 0;
-                              setServiceData({ ...serviceData, addons: newAddons });
-                            }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            placeholder="5000"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        const newAddons = serviceData.addons.filter((_, i) => i !== idx);
-                        setServiceData({ ...serviceData, addons: newAddons });
-                      }}
-                      className="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Remove Add-on
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => {
-                setServiceData({
-                  ...serviceData,
-                  addons: [...serviceData.addons, { name: '', price: 0, priceType: 'flat' }]
-                });
-              }}
-              className="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-green-400 hover:text-green-600 transition-colors font-medium flex items-center justify-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Another Add-on
-            </button>
-          </div>
+          <ServiceAddOnsStep
+            addons={serviceData.addons}
+            onAddonsChange={(addons) => handleServiceChange({ addons })}
+          />
         );
 
       case 5:
         return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Deposit & Publishing</h2>
-              <p className="text-gray-600">Configure payment terms and publish your service</p>
-            </div>
-
-            <div>
-              <label className="flex items-center gap-3 cursor-pointer p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={serviceData.depositEnabled}
-                  onChange={(e) => setServiceData({ ...serviceData, depositEnabled: e.target.checked })}
-                  className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
-                />
-                <div>
-                  <p className="font-medium text-gray-900">Require Deposit</p>
-                  <p className="text-sm text-gray-500">Customers must pay a deposit to accept the quote</p>
-                </div>
-              </label>
-            </div>
-
-            {serviceData.depositEnabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Deposit Amount
-                </label>
-                <div className="flex items-center gap-4">
-                  <input
-                    type="number"
-                    value={serviceData.depositAmount}
-                    onChange={(e) => setServiceData({ ...serviceData, depositAmount: parseInt(e.target.value) })}
-                    className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                  <span className="text-gray-600">or</span>
-                  <select className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                    <option>Fixed amount</option>
-                    <option>Percentage</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
-                <div>
-                  <p className="font-medium text-green-900 mb-1">Ready to Publish</p>
-                  <p className="text-sm text-green-700">
-                    Your service is configured and ready to go live. Customers will be able to get instant quotes using your pricing engine.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ServiceDepositPublishStep
+            depositEnabled={serviceData.depositEnabled}
+            depositAmount={serviceData.depositAmount}
+            onDepositEnabledChange={(depositEnabled) => handleServiceChange({ depositEnabled })}
+            onDepositAmountChange={(depositAmount) => handleServiceChange({ depositAmount })}
+          />
         );
     }
   };
+
+  const previewSqft = 6000;
+  const pricingBreakdown = calculatePrice(
+    previewSqft,
+    serviceData.pricingModel,
+    serviceData.basePrice,
+    serviceData.perSqftRate,
+    serviceData.pricingTiers,
+    serviceData.minimumPrice
+  );
+  const recurringPrices = calculateRecurringPrices(pricingBreakdown.finalPrice, serviceData.recurringAdjustments);
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -698,11 +191,18 @@ export default function Services() {
         <div>
           <div className="flex items-center gap-2 md:gap-3 mb-2">
             <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900">Service Configuration</h1>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-              serviceData.status === 'live' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-            }`}>
-              {serviceData.status === 'live' ? 'Live' : 'Draft'}
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor()}`}>
+              {getStatusLabel()}
             </span>
+            {serviceData.hasUnpublishedChanges && (
+              <button
+                onClick={handleRevertToLive}
+                className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors font-medium"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Revert
+              </button>
+            )}
           </div>
           <p className="text-sm md:text-base text-gray-600">Configure your service details and pricing</p>
         </div>
@@ -781,71 +281,69 @@ export default function Services() {
 
                 {currentStep === 3 && (
                   <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs font-medium text-blue-900 mb-2">Pricing Breakdown (6,000 sqft example)</p>
-                    {serviceData.pricingModel === 'base_per_sqft' ? (
-                      <div className="space-y-1 text-xs text-blue-800">
-                        <div className="flex justify-between">
-                          <span>Base Price:</span>
-                          <span>${serviceData.basePrice.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Square Footage (6,000 × ${serviceData.perSqftRate}):</span>
-                          <span>${(6000 * serviceData.perSqftRate).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between pt-1 border-t border-blue-300">
-                          <span>Subtotal:</span>
-                          <span className="font-medium">${(serviceData.basePrice + (6000 * serviceData.perSqftRate)).toFixed(2)}</span>
-                        </div>
-                        {serviceData.minimumPrice > (serviceData.basePrice + (6000 * serviceData.perSqftRate)) && (
-                          <div className="flex justify-between pt-1 border-t border-blue-300">
-                            <span>Minimum Applied:</span>
-                            <span className="font-medium">${serviceData.minimumPrice.toFixed(2)}</span>
+                    <p className="text-xs font-medium text-blue-900 mb-3">Pricing Breakdown ({previewSqft.toLocaleString()} sqft example)</p>
+                    <div className="space-y-2 text-xs text-blue-800">
+                      {serviceData.pricingModel === 'base_per_sqft' ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Base Rate:</span>
+                            <span className="font-medium">${pricingBreakdown.baseRate.toFixed(2)}</span>
                           </div>
-                        )}
-                        <div className="flex justify-between pt-2 border-t border-blue-300 font-semibold">
-                          <span>Final Price:</span>
-                          <span>${calculatePreviewPrice(6000).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1 text-xs text-blue-800">
-                        <div className="flex justify-between">
-                          <span>Tier Price:</span>
-                          <span>${serviceData.pricingTiers.find(t => 6000 >= t.min && 6000 <= t.max)?.price || 0}</span>
-                        </div>
-                        {serviceData.minimumPrice > (serviceData.pricingTiers.find(t => 6000 >= t.min && 6000 <= t.max)?.price || 0) && (
-                          <div className="flex justify-between pt-1 border-t border-blue-300">
-                            <span>Minimum Applied:</span>
-                            <span className="font-medium">${serviceData.minimumPrice.toFixed(2)}</span>
+                          <div className="flex justify-between">
+                            <span>Square Footage ({previewSqft.toLocaleString()} × ${serviceData.perSqftRate}):</span>
+                            <span className="font-medium">+${pricingBreakdown.sqftCalculation.toFixed(2)}</span>
                           </div>
-                        )}
-                        <div className="flex justify-between pt-2 border-t border-blue-300 font-semibold">
-                          <span>Final Price:</span>
-                          <span>${calculatePreviewPrice(6000).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
+                          <div className="flex justify-between pt-2 border-t border-blue-300">
+                            <span>Subtotal:</span>
+                            <span className="font-medium">${pricingBreakdown.subtotal.toFixed(2)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Tier Price:</span>
+                            <span className="font-medium">${pricingBreakdown.baseRate.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between pt-2 border-t border-blue-300">
+                            <span>Subtotal:</span>
+                            <span className="font-medium">${pricingBreakdown.subtotal.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
 
-                    {(serviceData.recurringAdjustments.weekly?.value !== 0 || serviceData.recurringAdjustments.biweekly?.value !== 0 || serviceData.recurringAdjustments.monthly?.value !== 0) && (
+                      {pricingBreakdown.minimumApplied && (
+                        <div className="flex justify-between pt-2 border-t border-blue-300">
+                          <span>Minimum Floor Applied:</span>
+                          <span className="font-medium">${pricingBreakdown.minimumAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between pt-2 border-t-2 border-blue-400 font-semibold">
+                        <span>Final Price:</span>
+                        <span>${pricingBreakdown.finalPrice.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {(recurringPrices.weekly !== undefined || recurringPrices.biweekly !== undefined || recurringPrices.monthly !== undefined) && (
                       <div className="mt-3 pt-3 border-t border-blue-300">
                         <p className="text-xs font-medium text-blue-900 mb-2">Recurring Pricing</p>
                         <div className="space-y-1 text-xs text-blue-800">
-                          {serviceData.recurringAdjustments.weekly && serviceData.recurringAdjustments.weekly.value !== 0 && (
+                          {recurringPrices.weekly !== undefined && serviceData.recurringAdjustments.weekly?.value !== 0 && (
                             <div className="flex justify-between">
                               <span>Weekly {serviceData.recurringAdjustments.weekly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.weekly.value}%)` : `(-$${serviceData.recurringAdjustments.weekly.value})`}:</span>
-                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'weekly').toFixed(2)}</span>
+                              <span className="font-medium">${recurringPrices.weekly.toFixed(2)}</span>
                             </div>
                           )}
-                          {serviceData.recurringAdjustments.biweekly && serviceData.recurringAdjustments.biweekly.value !== 0 && (
+                          {recurringPrices.biweekly !== undefined && serviceData.recurringAdjustments.biweekly?.value !== 0 && (
                             <div className="flex justify-between">
                               <span>Bi-weekly {serviceData.recurringAdjustments.biweekly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.biweekly.value}%)` : `(-$${serviceData.recurringAdjustments.biweekly.value})`}:</span>
-                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'biweekly').toFixed(2)}</span>
+                              <span className="font-medium">${recurringPrices.biweekly.toFixed(2)}</span>
                             </div>
                           )}
-                          {serviceData.recurringAdjustments.monthly && serviceData.recurringAdjustments.monthly.value !== 0 && (
+                          {recurringPrices.monthly !== undefined && serviceData.recurringAdjustments.monthly?.value !== 0 && (
                             <div className="flex justify-between">
                               <span>Monthly {serviceData.recurringAdjustments.monthly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.monthly.value}%)` : `(-$${serviceData.recurringAdjustments.monthly.value})`}:</span>
-                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'monthly').toFixed(2)}</span>
+                              <span className="font-medium">${recurringPrices.monthly.toFixed(2)}</span>
                             </div>
                           )}
                         </div>
