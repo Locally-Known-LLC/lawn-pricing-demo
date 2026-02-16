@@ -75,6 +75,50 @@ export default function Services() {
     status: 'live',
   });
 
+  const validateTiers = () => {
+    const errors: string[] = [];
+    serviceData.pricingTiers.forEach((tier, idx) => {
+      if (tier.min >= tier.max) {
+        errors.push(`Tier ${idx + 1}: Start must be less than end`);
+      }
+      if (idx > 0) {
+        const prevTier = serviceData.pricingTiers[idx - 1];
+        if (tier.min !== prevTier.max + 1) {
+          if (tier.min > prevTier.max + 1) {
+            errors.push(`Gap between tier ${idx} and ${idx + 1}`);
+          } else if (tier.min <= prevTier.max) {
+            errors.push(`Overlap between tier ${idx} and ${idx + 1}`);
+          }
+        }
+      }
+    });
+    return errors;
+  };
+
+  const calculatePreviewPrice = (sqft: number) => {
+    if (serviceData.pricingModel === 'base_per_sqft') {
+      const calculated = serviceData.basePrice + (sqft * serviceData.perSqftRate);
+      return Math.max(calculated, serviceData.minimumPrice);
+    } else {
+      const tier = serviceData.pricingTiers.find(t => sqft >= t.min && sqft <= t.max);
+      const calculated = tier ? tier.price : serviceData.pricingTiers[serviceData.pricingTiers.length - 1]?.price || 0;
+      return Math.max(calculated, serviceData.minimumPrice);
+    }
+  };
+
+  const getRecurringPrice = (basePrice: number, frequency: 'weekly' | 'biweekly' | 'monthly') => {
+    const adjustment = serviceData.recurringAdjustments[frequency];
+    if (!adjustment || adjustment.value === 0) return basePrice;
+
+    if (adjustment.type === 'percentage') {
+      return basePrice * (1 - adjustment.value / 100);
+    } else {
+      return basePrice - adjustment.value;
+    }
+  };
+
+  const tierValidationErrors = validateTiers();
+
   const steps = [
     { number: 1, title: 'Basics', subtitle: 'Service details' },
     { number: 2, title: 'Plans', subtitle: 'Pricing tiers' },
@@ -286,13 +330,27 @@ export default function Services() {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
                       Square Footage Tiers
                     </label>
                   </div>
+                  <p className="text-xs text-gray-500 mb-3">Ranges must cover all square footage without gaps or overlap.</p>
+
+                  {tierValidationErrors.length > 0 && (
+                    <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      {tierValidationErrors.map((error, idx) => (
+                        <p key={idx} className="text-xs text-red-700">{error}</p>
+                      ))}
+                    </div>
+                  )}
+
                   {serviceData.pricingTiers.map((tier, idx) => (
-                    <div key={idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-3">
+                    <div key={idx} className={`p-4 bg-gray-50 rounded-lg border mb-3 ${
+                      tierValidationErrors.some(e => e.includes(`Tier ${idx + 1}`) || e.includes(`tier ${idx}`) || e.includes(`tier ${idx + 1}`))
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-200'
+                    }`}>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -306,7 +364,8 @@ export default function Services() {
                               newTiers[idx].min = parseInt(e.target.value) || 0;
                               setServiceData({ ...serviceData, pricingTiers: newTiers });
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+                            disabled={idx === 0}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                           />
                         </div>
                         <div>
@@ -318,7 +377,13 @@ export default function Services() {
                             value={tier.max}
                             onChange={(e) => {
                               const newTiers = [...serviceData.pricingTiers];
-                              newTiers[idx].max = parseInt(e.target.value) || 0;
+                              const newMax = parseInt(e.target.value) || 0;
+                              newTiers[idx].max = newMax;
+
+                              if (idx < newTiers.length - 1) {
+                                newTiers[idx + 1].min = newMax + 1;
+                              }
+
                               setServiceData({ ...serviceData, pricingTiers: newTiers });
                             }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
@@ -340,16 +405,21 @@ export default function Services() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
                             />
                           </div>
-                          <button
-                            onClick={() => {
-                              const newTiers = serviceData.pricingTiers.filter((_, i) => i !== idx);
-                              setServiceData({ ...serviceData, pricingTiers: newTiers });
-                            }}
-                            className="mt-auto px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete tier"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {serviceData.pricingTiers.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const newTiers = serviceData.pricingTiers.filter((_, i) => i !== idx);
+                                if (idx < newTiers.length && idx > 0) {
+                                  newTiers[idx].min = newTiers[idx - 1].max + 1;
+                                }
+                                setServiceData({ ...serviceData, pricingTiers: newTiers });
+                              }}
+                              className="mt-auto px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete tier"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -704,10 +774,85 @@ export default function Services() {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 lg:sticky lg:top-24">
             <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-4">Customer Preview</h3>
-            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 p-4">
+            <div className="aspect-[3/4] bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200 p-4 overflow-y-auto">
               <div className="bg-white rounded-lg p-4 mb-4">
                 <h4 className="font-bold text-gray-900 mb-2">{serviceData.name}</h4>
                 <p className="text-sm text-gray-600 mb-4">{serviceData.description}</p>
+
+                {currentStep === 3 && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs font-medium text-blue-900 mb-2">Pricing Breakdown (6,000 sqft example)</p>
+                    {serviceData.pricingModel === 'base_per_sqft' ? (
+                      <div className="space-y-1 text-xs text-blue-800">
+                        <div className="flex justify-between">
+                          <span>Base Price:</span>
+                          <span>${serviceData.basePrice.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Square Footage (6,000 × ${serviceData.perSqftRate}):</span>
+                          <span>${(6000 * serviceData.perSqftRate).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-blue-300">
+                          <span>Subtotal:</span>
+                          <span className="font-medium">${(serviceData.basePrice + (6000 * serviceData.perSqftRate)).toFixed(2)}</span>
+                        </div>
+                        {serviceData.minimumPrice > (serviceData.basePrice + (6000 * serviceData.perSqftRate)) && (
+                          <div className="flex justify-between pt-1 border-t border-blue-300">
+                            <span>Minimum Applied:</span>
+                            <span className="font-medium">${serviceData.minimumPrice.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-2 border-t border-blue-300 font-semibold">
+                          <span>Final Price:</span>
+                          <span>${calculatePreviewPrice(6000).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 text-xs text-blue-800">
+                        <div className="flex justify-between">
+                          <span>Tier Price:</span>
+                          <span>${serviceData.pricingTiers.find(t => 6000 >= t.min && 6000 <= t.max)?.price || 0}</span>
+                        </div>
+                        {serviceData.minimumPrice > (serviceData.pricingTiers.find(t => 6000 >= t.min && 6000 <= t.max)?.price || 0) && (
+                          <div className="flex justify-between pt-1 border-t border-blue-300">
+                            <span>Minimum Applied:</span>
+                            <span className="font-medium">${serviceData.minimumPrice.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-2 border-t border-blue-300 font-semibold">
+                          <span>Final Price:</span>
+                          <span>${calculatePreviewPrice(6000).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {(serviceData.recurringAdjustments.weekly?.value !== 0 || serviceData.recurringAdjustments.biweekly?.value !== 0 || serviceData.recurringAdjustments.monthly?.value !== 0) && (
+                      <div className="mt-3 pt-3 border-t border-blue-300">
+                        <p className="text-xs font-medium text-blue-900 mb-2">Recurring Pricing</p>
+                        <div className="space-y-1 text-xs text-blue-800">
+                          {serviceData.recurringAdjustments.weekly && serviceData.recurringAdjustments.weekly.value !== 0 && (
+                            <div className="flex justify-between">
+                              <span>Weekly {serviceData.recurringAdjustments.weekly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.weekly.value}%)` : `(-$${serviceData.recurringAdjustments.weekly.value})`}:</span>
+                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'weekly').toFixed(2)}</span>
+                            </div>
+                          )}
+                          {serviceData.recurringAdjustments.biweekly && serviceData.recurringAdjustments.biweekly.value !== 0 && (
+                            <div className="flex justify-between">
+                              <span>Bi-weekly {serviceData.recurringAdjustments.biweekly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.biweekly.value}%)` : `(-$${serviceData.recurringAdjustments.biweekly.value})`}:</span>
+                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'biweekly').toFixed(2)}</span>
+                            </div>
+                          )}
+                          {serviceData.recurringAdjustments.monthly && serviceData.recurringAdjustments.monthly.value !== 0 && (
+                            <div className="flex justify-between">
+                              <span>Monthly {serviceData.recurringAdjustments.monthly.type === 'percentage' ? `(-${serviceData.recurringAdjustments.monthly.value}%)` : `(-$${serviceData.recurringAdjustments.monthly.value})`}:</span>
+                              <span className="font-medium">${getRecurringPrice(calculatePreviewPrice(6000), 'monthly').toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2 mb-4">
                   {serviceData.plans.map((plan, idx) => (
