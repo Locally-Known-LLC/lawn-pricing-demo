@@ -78,7 +78,7 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   const dailyMetrics = calculateDailyMetrics(filteredEvents);
 
   const currentPeriodDays = getCurrentPeriodDays(timeRange);
-  const baselineEnabled = compareMode === 'rolling_avg' && shouldEnableBaseline(allEvents);
+  const baselineEnabled = compareMode === 'rolling_avg';
   const currentPeriodEnd = new Date();
 
   const quotesCompletedBaseline = baselineEnabled
