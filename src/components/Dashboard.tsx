@@ -1,5 +1,10 @@
-import { DollarSign, FileText, TrendingUp, Percent, X, Plus, Eye, Settings } from 'lucide-react';
+import { ExternalLink, X, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
+import MetricCard from './analytics/MetricCard';
+import TimeSelector, { TimeRange } from './analytics/TimeSelector';
+import { FunnelEvent, calculateFunnelMetrics, calculateFunnelSteps, calculateDailyMetrics } from '../utils/analyticsAggregation';
+import { shouldEnableBaseline, getBaselineForMetric, compareToBaseline } from '../utils/baselineComparison';
+import { checkTrendChartDataGate, checkFunnelVisualizationGate } from '../utils/dataGates';
 
 interface Quote {
   id: string;
@@ -13,8 +18,6 @@ interface Quote {
   plan: string;
 }
 
-type TimeRange = '7d' | '30d' | '90d';
-
 interface DashboardProps {
   onNavigate?: (page: string) => void;
 }
@@ -22,16 +25,134 @@ interface DashboardProps {
 export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  const [showRecentQuotes, setShowRecentQuotes] = useState(false);
 
-  const hasServices = true;
-  const hasQuotes = true;
+  const [allEvents] = useState<FunnelEvent[]>(() => {
+    const events: FunnelEvent[] = [];
+    const now = new Date();
 
-  const kpis = [
-    { label: 'Quotes Generated (30d)', value: '1,247', change: '+12.5%', icon: FileText, color: 'blue' },
-    { label: 'Deposit Conversion', value: '24.3%', change: '+3.1%', icon: Percent, color: 'green' },
-    { label: 'Avg Quote Value', value: '$76', change: '+8.2%', icon: DollarSign, color: 'blue' },
-    { label: 'Deposits via LawnPricing', value: '$34,280', change: '+18.2%', icon: DollarSign, color: 'green' },
-  ];
+    for (let daysAgo = 90; daysAgo >= 0; daysAgo--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - daysAgo);
+
+      const baseQuotes = 8 + Math.floor(Math.random() * 5);
+
+      for (let i = 0; i < baseQuotes; i++) {
+        const quoteId = `quote-${daysAgo}-${i}`;
+        const quoteValue = 45 + Math.floor(Math.random() * 80);
+
+        const startTime = new Date(date);
+        startTime.setHours(8 + Math.floor(Math.random() * 10));
+
+        events.push({
+          quote_id: quoteId,
+          event_type: 'quote_started',
+          timestamp: startTime.toISOString(),
+          metadata: {}
+        });
+
+        if (Math.random() > 0.15) {
+          const completeTime = new Date(startTime);
+          completeTime.setMinutes(completeTime.getMinutes() + 2 + Math.floor(Math.random() * 3));
+
+          events.push({
+            quote_id: quoteId,
+            event_type: 'quote_completed',
+            timestamp: completeTime.toISOString(),
+            metadata: { quote_value: quoteValue }
+          });
+
+          if (Math.random() > 0.20) {
+            const revealTime = new Date(completeTime);
+            revealTime.setMinutes(revealTime.getMinutes() + 1);
+
+            events.push({
+              quote_id: quoteId,
+              event_type: 'pricing_revealed',
+              timestamp: revealTime.toISOString(),
+              metadata: { quote_value: quoteValue }
+            });
+
+            if (Math.random() > 0.35) {
+              const depositViewTime = new Date(revealTime);
+              depositViewTime.setMinutes(depositViewTime.getMinutes() + 1 + Math.floor(Math.random() * 2));
+
+              events.push({
+                quote_id: quoteId,
+                event_type: 'deposit_page_viewed',
+                timestamp: depositViewTime.toISOString(),
+                metadata: { quote_value: quoteValue }
+              });
+
+              if (Math.random() > 0.40) {
+                const depositPaidTime = new Date(depositViewTime);
+                depositPaidTime.setMinutes(depositPaidTime.getMinutes() + 2 + Math.floor(Math.random() * 5));
+
+                events.push({
+                  quote_id: quoteId,
+                  event_type: 'deposit_paid',
+                  timestamp: depositPaidTime.toISOString(),
+                  metadata: { quote_value: quoteValue, deposit_amount: quoteValue * 0.25 }
+                });
+              }
+            }
+          }
+        }
+      }
+
+      const pendingQuotes = Math.floor(Math.random() * 3);
+      for (let j = 0; j < pendingQuotes; j++) {
+        const quoteId = `pending-${daysAgo}-${j}`;
+        const quoteValue = 50 + Math.floor(Math.random() * 70);
+
+        const startTime = new Date(date);
+        startTime.setHours(9 + Math.floor(Math.random() * 8));
+
+        events.push({
+          quote_id: quoteId,
+          event_type: 'quote_started',
+          timestamp: startTime.toISOString(),
+          metadata: {}
+        });
+
+        const completeTime = new Date(startTime);
+        completeTime.setMinutes(completeTime.getMinutes() + 2 + Math.floor(Math.random() * 3));
+
+        events.push({
+          quote_id: quoteId,
+          event_type: 'quote_completed',
+          timestamp: completeTime.toISOString(),
+          metadata: { quote_value: quoteValue }
+        });
+      }
+    }
+
+    return events;
+  });
+
+  const filteredEvents = filterEventsByTimeRange(allEvents, timeRange);
+  const metrics = calculateFunnelMetrics(filteredEvents);
+  const funnelSteps = calculateFunnelSteps(metrics);
+  const dailyMetrics = calculateDailyMetrics(filteredEvents);
+
+  const baselineEnabled = shouldEnableBaseline(allEvents);
+  const currentPeriodEnd = new Date();
+
+  const quotesCompletedBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'quotesCompleted');
+  const depositConversionBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'depositConversion');
+  const avgQuoteValueBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'avgQuoteValue');
+  const totalDepositsBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'totalDeposits');
+
+  const quotesCompletedComparison = compareToBaseline(metrics.quotesCompleted, quotesCompletedBaseline, baselineEnabled);
+  const depositConversionComparison = compareToBaseline(metrics.depositConversionRate, depositConversionBaseline, baselineEnabled);
+  const avgQuoteValueComparison = compareToBaseline(metrics.avgQuoteValue, avgQuoteValueBaseline, baselineEnabled);
+  const totalDepositsComparison = compareToBaseline(metrics.totalDepositsCollected, totalDepositsBaseline, baselineEnabled);
+
+  const trendChartGate = checkTrendChartDataGate(filteredEvents);
+  const funnelGate = checkFunnelVisualizationGate(metrics.quotesCompleted);
+
+  const quoteCompletionTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.quotesCompleted }));
+  const depositRevenueTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.depositsCollected }));
 
   const recentQuotes: Quote[] = [
     { id: '1', address: '123 Maple St', customer: 'John Smith', service: 'Weekly Mowing', amount: 55, status: 'paid', date: '2024-02-14', lawnsqft: 5200, plan: 'Standard' },
@@ -41,206 +162,94 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
     { id: '5', address: '654 Birch Ln', customer: 'Tom Wilson', service: 'Bi-weekly Mowing', amount: 85, status: 'accepted', date: '2024-02-12', lawnsqft: 9500, plan: 'Premium' },
   ];
 
-  const chartData = {
-    '7d': [
-      { label: 'Mon', value: 42 },
-      { label: 'Tue', value: 38 },
-      { label: 'Wed', value: 51 },
-      { label: 'Thu', value: 45 },
-      { label: 'Fri', value: 58 },
-      { label: 'Sat', value: 32 },
-      { label: 'Sun', value: 28 },
-    ],
-    '30d': [
-      { label: 'Week 1', value: 180 },
-      { label: 'Week 2', value: 220 },
-      { label: 'Week 3', value: 195 },
-      { label: 'Week 4', value: 240 },
-    ],
-    '90d': [
-      { label: 'Jan', value: 180 },
-      { label: 'Feb', value: 220 },
-      { label: 'Mar', value: 195 },
-    ],
-  };
-
-  const currentChartData = chartData[timeRange];
-  const maxValue = Math.max(...currentChartData.map(d => d.value));
-
-  const totalQuotes = 1247;
-  const depositsPaid = 303;
-  const conversionRate = ((depositsPaid / totalQuotes) * 100).toFixed(1);
-
-  if (!hasServices || !hasQuotes) {
-    return (
-      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-sm md:text-base text-gray-600">Overview of your pricing engine performance</p>
-        </div>
-
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-8 h-8 text-green-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Let's generate your first quote.</h2>
-            <p className="text-gray-600 mb-6">Set up your service pricing and publish your instant quote widget.</p>
-            <div className="space-y-3">
-              <button
-                onClick={() => onNavigate?.('pricing')}
-                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-              >
-                <Settings className="w-5 h-5" />
-                Configure Services
-              </button>
-              <button
-                onClick={() => onNavigate?.('quotes')}
-                className="w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Create Manual Quote
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8">
-        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-sm md:text-base text-gray-600">Overview of your pricing engine performance</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.label} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-              <div className="flex items-center justify-between mb-2">
-                <div className={`w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center ${
-                  kpi.color === 'blue' ? 'bg-blue-100' : 'bg-green-100'
-                }`}>
-                  <Icon className={`w-4 h-4 md:w-5 md:h-5 ${
-                    kpi.color === 'blue' ? 'text-blue-600' : 'text-green-600'
-                  }`} />
-                </div>
-                <span className="text-xs md:text-sm font-medium text-green-600">{kpi.change}</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-600 mb-1">{kpi.label}</p>
-              <p className="text-2xl md:text-3xl font-bold text-gray-900">{kpi.value}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => onNavigate?.('quotes')}
-            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Create Quote
-          </button>
-          <button
-            onClick={() => onNavigate?.('quotes')}
-            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center justify-center gap-2"
-          >
-            <Eye className="w-5 h-5" />
-            View Pending Quotes
-          </button>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+            <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
+          </div>
+          <TimeSelector value={timeRange} onChange={setTimeRange} />
         </div>
       </div>
 
-      {/* Funnel Visualization */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6 mb-6 md:mb-8">
-        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4">Quote Funnel (30d)</h2>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <MetricCard
+          title="Quotes Completed"
+          value={metrics.quotesCompleted}
+          baseline={quotesCompletedComparison}
+        />
+        <MetricCard
+          title="Deposit Conversion"
+          value={`${metrics.depositConversionRate.toFixed(1)}%`}
+          baseline={depositConversionComparison}
+        />
+        <MetricCard
+          title="Avg Quote Value"
+          value={`$${metrics.avgQuoteValue.toFixed(2)}`}
+          baseline={avgQuoteValueComparison}
+        />
+        <MetricCard
+          title="Total Deposits Collected"
+          value={`$${metrics.totalDepositsCollected.toFixed(2)}`}
+          baseline={totalDepositsComparison}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <TrendChartComponent
+          title="Quote Completion Trend"
+          data={quoteCompletionTrendData}
+          hasMinimumData={trendChartGate.hasMinimumData}
+          insufficientDataMessage={trendChartGate.message}
+        />
+        <TrendChartComponent
+          title="Deposit Revenue Trend"
+          data={depositRevenueTrendData}
+          hasMinimumData={trendChartGate.hasMinimumData}
+          insufficientDataMessage={trendChartGate.message}
+          valueFormatter={(v) => `$${v.toFixed(0)}`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <FunnelVisualizationComponent
+          steps={funnelSteps}
+          hasMinimumData={funnelGate.hasMinimumData}
+          insufficientDataMessage={funnelGate.message}
+        />
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Revenue</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Quotes Created</p>
-              <p className="text-2xl font-bold text-gray-900">{totalQuotes.toLocaleString()}</p>
+              <p className="text-sm text-gray-500 mb-1">Pending Quotes</p>
+              <p className="text-2xl font-bold text-gray-900">{metrics.pendingQuotesCount}</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">Deposits Paid</p>
-              <p className="text-2xl font-bold text-green-600">{depositsPaid.toLocaleString()}</p>
-            </div>
-          </div>
-          <div className="relative">
-            <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-green-500 rounded-full transition-all duration-500"
-                style={{ width: `${conversionRate}%` }}
-              />
-            </div>
-            <div className="mt-2 text-center">
-              <span className="text-sm font-semibold text-gray-900">{conversionRate}% Conversion Rate</span>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Total Value</p>
+              <p className="text-2xl font-bold text-gray-900">${metrics.pendingQuoteValue.toFixed(2)}</p>
             </div>
           </div>
+          <button
+            onClick={() => onNavigate?.('quotes')}
+            className="text-sm text-green-600 hover:text-green-700 font-medium"
+          >
+            View Quotes →
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h2 className="text-base md:text-lg font-semibold text-gray-900">Quotes Over Time</h2>
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              {(['7d', '30d', '90d'] as TimeRange[]).map((range) => (
-                <button
-                  key={range}
-                  onClick={() => setTimeRange(range)}
-                  className={`px-2 md:px-3 py-1 text-xs md:text-sm font-medium rounded transition-colors ${
-                    timeRange === range
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {range === '7d' ? '7d' : range === '30d' ? '30d' : '90d'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-4">
-            {currentChartData.map((data) => (
-              <div key={data.label}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">{data.label}</span>
-                  <span className="text-sm text-gray-900 font-semibold">{data.value}</span>
-                </div>
-                <div className="bg-gray-100 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${(data.value / maxValue) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4">Quick Stats</h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 md:p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-gray-900">Avg Quote Value</p>
-                <p className="text-xs text-gray-500">Last 30 days</p>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-gray-900">$76</p>
-            </div>
-            <div className="flex items-center justify-between p-3 md:p-4 bg-green-50 rounded-lg border border-green-200">
-              <div>
-                <p className="text-xs md:text-sm font-medium text-green-900">Deposits via LawnPricing</p>
-                <p className="text-xs text-green-600">This month</p>
-              </div>
-              <p className="text-xl md:text-2xl font-bold text-green-700">$8,920</p>
-            </div>
-          </div>
+      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Understanding Your Metrics</h3>
+          <a
+            href="#"
+            className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+          >
+            What affects deposit conversion?
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       </div>
 
@@ -476,6 +485,156 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
           </div>
         </>
       )}
+
+      <div className="bg-white rounded-lg border border-gray-200 mt-6">
+        <button
+          onClick={() => setShowRecentQuotes(!showRecentQuotes)}
+          className="w-full p-4 md:p-6 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+        >
+          <h2 className="text-base md:text-lg font-semibold text-gray-900">Recent Quotes</h2>
+          <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${showRecentQuotes ? 'rotate-180' : ''}`} />
+        </button>
+        {showRecentQuotes && (
+          <div className="border-t border-gray-200">
+            <div className="divide-y divide-gray-200">
+              {recentQuotes.slice(0, 5).map((quote) => (
+                <div
+                  key={quote.id}
+                  onClick={() => setSelectedQuote(quote)}
+                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      quote.status === 'paid' ? 'bg-green-100 text-green-800' :
+                      quote.status === 'accepted' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {quote.status.charAt(0).toUpperCase() + quote.status.slice(1)}
+                    </span>
+                    <span className="text-lg font-bold text-gray-900">${quote.amount}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 mb-1">{quote.address}</p>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{quote.plan}</span>
+                    <span>{quote.date}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
+}
+
+function TrendChartComponent({ title, data, hasMinimumData, insufficientDataMessage, valueFormatter }: {
+  title: string;
+  data: Array<{ date: string; value: number }>;
+  hasMinimumData: boolean;
+  insufficientDataMessage: string;
+  valueFormatter?: (value: number) => string;
+}) {
+  if (!hasMinimumData) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <div className="text-center py-8">
+          <p className="text-gray-500">{insufficientDataMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  const formatValue = valueFormatter || ((v: number) => v.toString());
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+      <div className="space-y-3">
+        {data.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No data available</p>
+          </div>
+        ) : (
+          data.slice(-14).map((point, index) => (
+            <div key={index} className="flex items-center gap-3">
+              <span className="text-xs text-gray-500 w-20 flex-shrink-0">
+                {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+              <div className="flex-1 bg-gray-100 rounded-full h-8 relative">
+                <div
+                  className="bg-green-500 h-full rounded-full flex items-center justify-end pr-2"
+                  style={{ width: `${(point.value / maxValue) * 100}%`, minWidth: point.value > 0 ? '40px' : '0' }}
+                >
+                  {point.value > 0 && (
+                    <span className="text-xs font-medium text-white">{formatValue(point.value)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FunnelVisualizationComponent({ steps, hasMinimumData, insufficientDataMessage }: {
+  steps: Array<{ label: string; count: number; conversionFromPrevious: number | null }>;
+  hasMinimumData: boolean;
+  insufficientDataMessage: string;
+}) {
+  if (!hasMinimumData) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Funnel Structure</h3>
+        <div className="text-center py-8">
+          <p className="text-gray-500">{insufficientDataMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-6">Funnel Structure</h3>
+      <div className="space-y-4">
+        {steps.map((step, index) => (
+          <div key={step.label}>
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-900">{step.label}</p>
+                {step.conversionFromPrevious !== null && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    {step.conversionFromPrevious.toFixed(1)}% conversion
+                  </p>
+                )}
+              </div>
+              <p className="text-xl font-bold text-gray-900">{step.count}</p>
+            </div>
+            {index < steps.length - 1 && (
+              <div className="flex justify-center py-2">
+                <ChevronDown className="w-5 h-5 text-gray-400" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function filterEventsByTimeRange(events: FunnelEvent[], range: TimeRange): FunnelEvent[] {
+  if (range === 'all') return events;
+
+  const now = new Date();
+  const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
+  const days = daysMap[range] || 30;
+
+  const cutoffDate = new Date(now);
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  return events.filter(e => new Date(e.timestamp) >= cutoffDate);
 }

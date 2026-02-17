@@ -12,11 +12,10 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'quick-quote', label: 'Quick Quote', icon: Zap },
-    { id: 'pricing', label: 'Services', icon: DollarSign },
     { id: 'quotes', label: 'Quotes', icon: FileText },
-    { id: 'analytics', label: 'Integrations', icon: BarChart3 },
+    { id: 'pricing', label: 'Services', icon: DollarSign },
     { id: 'widget', label: 'Widget', icon: Layers },
+    { id: 'analytics', label: 'Integrations', icon: BarChart3 },
     { id: 'billing', label: 'Billing', icon: CreditCard },
   ];
 
@@ -63,6 +62,9 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
             </div>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="px-3 mb-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Growth</p>
+              </div>
               <button
                 onClick={() => {
                   onNavigate(growthItem.id);
