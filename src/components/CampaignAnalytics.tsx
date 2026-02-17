@@ -1,152 +1,147 @@
-import { ArrowLeft, TrendingUp, Eye, FileText, DollarSign } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import MetricCard from './analytics/MetricCard';
+import FunnelVisualization from './analytics/FunnelVisualization';
+import TrendChart from './analytics/TrendChart';
+import PendingRevenue from './analytics/PendingRevenue';
+import TimeSelector, { TimeRange } from './analytics/TimeSelector';
+import { FunnelEvent, calculateFunnelMetrics, calculateFunnelSteps, calculateDailyMetrics } from '../utils/analyticsAggregation';
+import { shouldEnableBaseline, getBaselineForMetric, compareToBaseline } from '../utils/baselineComparison';
+import { checkTrendChartDataGate, checkBaselineDataGate, checkFunnelVisualizationGate } from '../utils/dataGates';
 
 interface CampaignAnalyticsProps {
   onBack: () => void;
 }
 
 export default function CampaignAnalytics({ onBack }: CampaignAnalyticsProps) {
-  const metrics = [
-    { label: 'QR Scans', value: '247', icon: Eye, change: '+12%', color: 'blue' },
-    { label: 'Quotes Viewed', value: '189', icon: FileText, change: '+8%', color: 'green' },
-    { label: 'Deposits Paid', value: '34', icon: DollarSign, change: '+5%', color: 'green' },
-    { label: 'Conversion Rate', value: '13.8%', icon: TrendingUp, change: '+2.1%', color: 'green' },
-  ];
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  const [allEvents] = useState<FunnelEvent[]>([]);
 
-  const funnelData = [
-    { stage: 'QR Scans', count: 247, percentage: 100, color: 'bg-blue-500' },
-    { stage: 'Quotes Viewed', count: 189, percentage: 76.5, color: 'bg-green-500' },
-    { stage: 'Deposits Paid', count: 34, percentage: 13.8, color: 'bg-green-600' },
-  ];
+  const filteredEvents = filterEventsByTimeRange(allEvents, timeRange);
+  const metrics = calculateFunnelMetrics(filteredEvents);
+  const funnelSteps = calculateFunnelSteps(metrics);
+  const dailyMetrics = calculateDailyMetrics(filteredEvents);
+
+  const baselineEnabled = shouldEnableBaseline(allEvents);
+  const currentPeriodEnd = new Date();
+
+  const quotesCompletedBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'quotesCompleted');
+  const depositConversionBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'depositConversion');
+  const avgQuoteValueBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'avgQuoteValue');
+  const totalDepositsBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'totalDeposits');
+
+  const quotesCompletedComparison = compareToBaseline(metrics.quotesCompleted, quotesCompletedBaseline, baselineEnabled);
+  const depositConversionComparison = compareToBaseline(metrics.depositConversionRate, depositConversionBaseline, baselineEnabled);
+  const avgQuoteValueComparison = compareToBaseline(metrics.avgQuoteValue, avgQuoteValueBaseline, baselineEnabled);
+  const totalDepositsComparison = compareToBaseline(metrics.totalDepositsCollected, totalDepositsBaseline, baselineEnabled);
+
+  const trendChartGate = checkTrendChartDataGate(filteredEvents);
+  const baselineGate = checkBaselineDataGate(allEvents);
+  const funnelGate = checkFunnelVisualizationGate(metrics.quotesCompleted);
+
+  const quoteCompletionTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.quotesCompleted }));
+  const depositRevenueTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.depositsCollected }));
+
+  const handleViewQuotes = () => {
+    console.log('Navigate to quotes');
+  };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 font-medium text-sm md:text-base"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Campaigns
+          Back
         </button>
-        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Spring Boost Campaign</h1>
-        <p className="text-sm md:text-base text-gray-600">Performance analytics and insights</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6 md:mb-8">
-        {metrics.map((metric) => {
-          const Icon = metric.icon;
-          return (
-            <div key={metric.label} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-              <div className="flex items-center justify-between mb-2">
-                <div className={`w-9 h-9 md:w-10 md:h-10 rounded-lg flex items-center justify-center ${
-                  metric.color === 'blue' ? 'bg-blue-100' : 'bg-green-100'
-                }`}>
-                  <Icon className={`w-4 h-4 md:w-5 md:h-5 ${
-                    metric.color === 'blue' ? 'text-blue-600' : 'text-green-600'
-                  }`} />
-                </div>
-                <span className="text-xs md:text-sm font-medium text-green-600">{metric.change}</span>
-              </div>
-              <p className="text-xs md:text-sm text-gray-600 mb-1">{metric.label}</p>
-              <p className="text-2xl md:text-3xl font-bold text-gray-900">{metric.value}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-6">Conversion Funnel</h2>
-
-          <div className="space-y-4">
-            {funnelData.map((stage, idx) => (
-              <div key={stage.stage}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">{stage.stage}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600">{stage.count}</span>
-                    <span className="text-sm text-gray-500">({stage.percentage.toFixed(1)}%)</span>
-                  </div>
-                </div>
-                <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`${stage.color} h-full rounded-full transition-all duration-500`}
-                    style={{ width: `${stage.percentage}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Analytics</h1>
+            <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
           </div>
-
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Overall Conversion</span>
-              <span className="text-lg font-bold text-green-600">13.8%</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-          <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-6">Revenue Generated</h2>
-
-          <div className="mb-4 md:mb-6">
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-3xl md:text-4xl font-bold text-gray-900">$5,780</span>
-              <span className="text-base md:text-lg text-gray-500">total</span>
-            </div>
-            <p className="text-sm text-gray-600">From 34 deposits</p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Average Deposit</p>
-                <p className="text-xs text-gray-500">Per customer</p>
-              </div>
-              <p className="text-xl font-bold text-gray-900">$170</p>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Cost Per Acquisition</p>
-                <p className="text-xs text-gray-500">Campaign cost / deposits</p>
-              </div>
-              <p className="text-xl font-bold text-gray-900">$5.37</p>
-            </div>
-            <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
-              <div>
-                <p className="text-sm font-medium text-green-900">ROI</p>
-                <p className="text-xs text-green-600">Return on investment</p>
-              </div>
-              <p className="text-xl font-bold text-green-700">+31.5x</p>
-            </div>
-          </div>
+          <TimeSelector value={timeRange} onChange={setTimeRange} />
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
-        <h2 className="text-base md:text-lg font-semibold text-gray-900 mb-4 md:mb-6">Campaign Details</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <MetricCard
+          title="Quotes Completed"
+          value={metrics.quotesCompleted}
+          baseline={quotesCompletedComparison}
+        />
+        <MetricCard
+          title="Deposit Conversion"
+          value={`${metrics.depositConversionRate.toFixed(1)}%`}
+          baseline={depositConversionComparison}
+        />
+        <MetricCard
+          title="Avg Quote Value"
+          value={`$${metrics.avgQuoteValue.toFixed(2)}`}
+          baseline={avgQuoteValueComparison}
+        />
+        <MetricCard
+          title="Total Deposits Collected"
+          value={`$${metrics.totalDepositsCollected.toFixed(2)}`}
+          baseline={totalDepositsComparison}
+        />
+      </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          <div>
-            <p className="text-sm text-gray-500 mb-1">Total Addresses</p>
-            <p className="text-2xl font-bold text-gray-900">350</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 mb-1">Distribution Date</p>
-            <p className="text-lg font-semibold text-gray-900">Mar 10, 2024</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 mb-1">Campaign Status</p>
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Active
-            </span>
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 mb-1">Service Type</p>
-            <p className="text-lg font-semibold text-gray-900">Lawn Mowing</p>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <TrendChart
+          title="Quote Completion Trend"
+          data={quoteCompletionTrendData}
+          hasMinimumData={trendChartGate.hasMinimumData}
+          insufficientDataMessage={trendChartGate.message}
+        />
+        <TrendChart
+          title="Deposit Revenue Trend"
+          data={depositRevenueTrendData}
+          hasMinimumData={trendChartGate.hasMinimumData}
+          insufficientDataMessage={trendChartGate.message}
+          valueFormatter={(v) => `$${v.toFixed(0)}`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <FunnelVisualization
+          steps={funnelSteps}
+          hasMinimumData={funnelGate.hasMinimumData}
+          insufficientDataMessage={funnelGate.message}
+        />
+        <PendingRevenue
+          pendingQuotesCount={metrics.pendingQuotesCount}
+          pendingQuoteValue={metrics.pendingQuoteValue}
+          onViewQuotes={handleViewQuotes}
+        />
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Understanding Your Metrics</h3>
+          <a
+            href="#"
+            className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
+          >
+            What affects deposit conversion?
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       </div>
     </div>
   );
+}
+
+function filterEventsByTimeRange(events: FunnelEvent[], range: TimeRange): FunnelEvent[] {
+  if (range === 'all') return events;
+
+  const now = new Date();
+  const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
+  const days = daysMap[range] || 30;
+
+  const cutoffDate = new Date(now);
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  return events.filter(e => new Date(e.timestamp) >= cutoffDate);
 }
