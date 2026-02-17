@@ -24,7 +24,9 @@ export function shouldEnableBaseline(events: FunnelEvent[]): boolean {
 export function calculateRolling90DayAverage(
   allEvents: FunnelEvent[],
   currentPeriodEnd: Date,
-  metricExtractor: (metrics: FunnelMetrics) => number
+  currentPeriodDays: number,
+  metricExtractor: (metrics: FunnelMetrics) => number,
+  isRateMetric: boolean
 ): number | null {
   const ninetyDaysAgo = new Date(currentPeriodEnd);
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -37,7 +39,16 @@ export function calculateRolling90DayAverage(
   if (baselineEvents.length === 0) return null;
 
   const metrics = calculateFunnelMetrics(baselineEvents);
-  return metricExtractor(metrics);
+  const rawMetricValue = metricExtractor(metrics);
+
+  // For rate metrics (percentages), return as-is
+  if (isRateMetric) {
+    return rawMetricValue;
+  }
+
+  // Normalize counts and values: (90-day total / 90) * current period days
+  const perDayAverage = rawMetricValue / 90;
+  return perDayAverage * currentPeriodDays;
 }
 
 export function compareToBaseline(
@@ -78,6 +89,7 @@ export function compareToBaseline(
 export function getBaselineForMetric(
   allEvents: FunnelEvent[],
   currentPeriodEnd: Date,
+  currentPeriodDays: number,
   metricType: 'depositConversion' | 'avgQuoteValue' | 'totalDeposits' | 'quotesCompleted'
 ): number | null {
   const metricExtractors = {
@@ -87,5 +99,14 @@ export function getBaselineForMetric(
     quotesCompleted: (m: FunnelMetrics) => m.quotesCompleted,
   };
 
-  return calculateRolling90DayAverage(allEvents, currentPeriodEnd, metricExtractors[metricType]);
+  // depositConversion is a rate metric (percentage), others need normalization
+  const isRateMetric = metricType === 'depositConversion';
+
+  return calculateRolling90DayAverage(
+    allEvents,
+    currentPeriodEnd,
+    currentPeriodDays,
+    metricExtractors[metricType],
+    isRateMetric
+  );
 }

@@ -53,7 +53,7 @@ export default function Widget({ onNavigate }: Props) {
 
   if (selectedVariant) {
     return (
-      <div className="max-w-5xl mx-auto pb-20 lg:pb-0">
+      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
         <WidgetConfigurator
           variant={selectedVariant}
           services={MOCK_SERVICES}

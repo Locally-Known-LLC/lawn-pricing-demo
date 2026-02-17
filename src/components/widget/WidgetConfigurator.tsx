@@ -149,7 +149,8 @@ export default function WidgetConfigurator({ variant, services, onUpdate, onClos
   };
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+      <div className="space-y-4 md:space-y-6">
       {showServiceChangeModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
@@ -288,6 +289,48 @@ export default function WidgetConfigurator({ variant, services, onUpdate, onClos
                   Publish Widget
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <div className="lg:sticky lg:top-6 h-fit">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Widget Preview</h3>
+          <div className="aspect-[9/16] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+            <div className="text-center px-4">
+              <div className="w-12 h-12 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Live preview of your widget</p>
+              <p className="text-xs text-gray-400">
+                Display: <span className="font-medium text-gray-600">{variant.displayType}</span>
+              </p>
+              {variant.linkedServiceName && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Service: <span className="font-medium text-gray-600">{variant.linkedServiceName}</span>
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Primary Color</span>
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-4 h-4 rounded border border-gray-300"
+                  style={{ backgroundColor: variant.stylingConfig.primaryColor }}
+                />
+                <span className="font-mono text-gray-700">{variant.stylingConfig.primaryColor}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Button Style</span>
+              <span className="font-medium text-gray-700">{variant.stylingConfig.buttonStyle}</span>
             </div>
           </div>
         </div>

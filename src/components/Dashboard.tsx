@@ -1,10 +1,11 @@
 import { ExternalLink, X, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MetricCard from './analytics/MetricCard';
-import TimeSelector, { TimeRange } from './analytics/TimeSelector';
+import TimeSelector, { TimeRange, CompareMode } from './analytics/TimeSelector';
 import { FunnelEvent, calculateFunnelMetrics, calculateFunnelSteps, calculateDailyMetrics } from '../utils/analyticsAggregation';
 import { shouldEnableBaseline, getBaselineForMetric, compareToBaseline } from '../utils/baselineComparison';
 import { checkTrendChartDataGate, checkFunnelVisualizationGate } from '../utils/dataGates';
+import { supabase } from '../lib/supabase';
 
 interface Quote {
   id: string;
@@ -25,123 +26,73 @@ interface DashboardProps {
 export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  const [compareMode, setCompareMode] = useState<CompareMode>('off');
   const [showRecentQuotes, setShowRecentQuotes] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [allEvents, setAllEvents] = useState<FunnelEvent[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const [allEvents] = useState<FunnelEvent[]>(() => {
-    const events: FunnelEvent[] = [];
-    const now = new Date();
+  // Mock account ID - in production this would come from auth context
+  const accountId = '00000000-0000-0000-0000-000000000000';
 
-    for (let daysAgo = 90; daysAgo >= 0; daysAgo--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - daysAgo);
+  useEffect(() => {
+    fetchEvents();
+  }, []);
 
-      const baseQuotes = 8 + Math.floor(Math.random() * 5);
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-      for (let i = 0; i < baseQuotes; i++) {
-        const quoteId = `quote-${daysAgo}-${i}`;
-        const quoteValue = 45 + Math.floor(Math.random() * 80);
+      console.log('🔍 Fetching events for account:', accountId);
+      console.log('🔗 Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+      console.log('🔑 Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-        const startTime = new Date(date);
-        startTime.setHours(8 + Math.floor(Math.random() * 10));
+      const { data, error: fetchError } = await supabase
+        .from('funnel_events')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('timestamp', { ascending: true });
 
-        events.push({
-          quote_id: quoteId,
-          event_type: 'quote_started',
-          timestamp: startTime.toISOString(),
-          metadata: {}
-        });
-
-        if (Math.random() > 0.15) {
-          const completeTime = new Date(startTime);
-          completeTime.setMinutes(completeTime.getMinutes() + 2 + Math.floor(Math.random() * 3));
-
-          events.push({
-            quote_id: quoteId,
-            event_type: 'quote_completed',
-            timestamp: completeTime.toISOString(),
-            metadata: { quote_value: quoteValue }
-          });
-
-          if (Math.random() > 0.20) {
-            const revealTime = new Date(completeTime);
-            revealTime.setMinutes(revealTime.getMinutes() + 1);
-
-            events.push({
-              quote_id: quoteId,
-              event_type: 'pricing_revealed',
-              timestamp: revealTime.toISOString(),
-              metadata: { quote_value: quoteValue }
-            });
-
-            if (Math.random() > 0.35) {
-              const depositViewTime = new Date(revealTime);
-              depositViewTime.setMinutes(depositViewTime.getMinutes() + 1 + Math.floor(Math.random() * 2));
-
-              events.push({
-                quote_id: quoteId,
-                event_type: 'deposit_page_viewed',
-                timestamp: depositViewTime.toISOString(),
-                metadata: { quote_value: quoteValue }
-              });
-
-              if (Math.random() > 0.40) {
-                const depositPaidTime = new Date(depositViewTime);
-                depositPaidTime.setMinutes(depositPaidTime.getMinutes() + 2 + Math.floor(Math.random() * 5));
-
-                events.push({
-                  quote_id: quoteId,
-                  event_type: 'deposit_paid',
-                  timestamp: depositPaidTime.toISOString(),
-                  metadata: { quote_value: quoteValue, deposit_amount: quoteValue * 0.25 }
-                });
-              }
-            }
-          }
-        }
+      if (fetchError) {
+        console.error('❌ Error fetching events:', fetchError);
+        setError(`Failed to load analytics data: ${fetchError.message}`);
+        setAllEvents([]);
+      } else {
+        console.log('✅ Fetched events:', data?.length || 0, 'events');
+        console.log('📊 First event:', data?.[0]);
+        setAllEvents(data || []);
       }
-
-      const pendingQuotes = Math.floor(Math.random() * 3);
-      for (let j = 0; j < pendingQuotes; j++) {
-        const quoteId = `pending-${daysAgo}-${j}`;
-        const quoteValue = 50 + Math.floor(Math.random() * 70);
-
-        const startTime = new Date(date);
-        startTime.setHours(9 + Math.floor(Math.random() * 8));
-
-        events.push({
-          quote_id: quoteId,
-          event_type: 'quote_started',
-          timestamp: startTime.toISOString(),
-          metadata: {}
-        });
-
-        const completeTime = new Date(startTime);
-        completeTime.setMinutes(completeTime.getMinutes() + 2 + Math.floor(Math.random() * 3));
-
-        events.push({
-          quote_id: quoteId,
-          event_type: 'quote_completed',
-          timestamp: completeTime.toISOString(),
-          metadata: { quote_value: quoteValue }
-        });
-      }
+    } catch (err) {
+      console.error('❌ Unexpected error:', err);
+      setError(`Failed to load analytics data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setAllEvents([]);
+    } finally {
+      setLoading(false);
     }
-
-    return events;
-  });
+  };
 
   const filteredEvents = filterEventsByTimeRange(allEvents, timeRange);
   const metrics = calculateFunnelMetrics(filteredEvents);
   const funnelSteps = calculateFunnelSteps(metrics);
   const dailyMetrics = calculateDailyMetrics(filteredEvents);
 
-  const baselineEnabled = shouldEnableBaseline(allEvents);
+  const currentPeriodDays = getCurrentPeriodDays(timeRange);
+  const baselineEnabled = compareMode === 'rolling_avg' && shouldEnableBaseline(allEvents);
   const currentPeriodEnd = new Date();
 
-  const quotesCompletedBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'quotesCompleted');
-  const depositConversionBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'depositConversion');
-  const avgQuoteValueBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'avgQuoteValue');
-  const totalDepositsBaseline = getBaselineForMetric(allEvents, currentPeriodEnd, 'totalDeposits');
+  const quotesCompletedBaseline = baselineEnabled
+    ? getBaselineForMetric(allEvents, currentPeriodEnd, currentPeriodDays, 'quotesCompleted')
+    : null;
+  const depositConversionBaseline = baselineEnabled
+    ? getBaselineForMetric(allEvents, currentPeriodEnd, currentPeriodDays, 'depositConversion')
+    : null;
+  const avgQuoteValueBaseline = baselineEnabled
+    ? getBaselineForMetric(allEvents, currentPeriodEnd, currentPeriodDays, 'avgQuoteValue')
+    : null;
+  const totalDepositsBaseline = baselineEnabled
+    ? getBaselineForMetric(allEvents, currentPeriodEnd, currentPeriodDays, 'totalDeposits')
+    : null;
 
   const quotesCompletedComparison = compareToBaseline(metrics.quotesCompleted, quotesCompletedBaseline, baselineEnabled);
   const depositConversionComparison = compareToBaseline(metrics.depositConversionRate, depositConversionBaseline, baselineEnabled);
@@ -162,6 +113,65 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
     { id: '5', address: '654 Birch Ln', customer: 'Tom Wilson', service: 'Bi-weekly Mowing', amount: 85, status: 'accepted', date: '2024-02-12', lawnsqft: 9500, plan: 'Premium' },
   ];
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-gray-500">Loading analytics data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (allEvents.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
+        <div className="mb-6 md:mb-8">
+          <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">Debug Info</h3>
+          <div className="text-xs space-y-1 font-mono">
+            <p>Loading: {loading.toString()}</p>
+            <p>Error: {error || 'none'}</p>
+            <p>Events count: {allEvents.length}</p>
+            <p>Account ID: {accountId}</p>
+            <p>Supabase URL: {import.meta.env.VITE_SUPABASE_URL || 'NOT SET'}</p>
+            <p>Anon Key: {import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}</p>
+          </div>
+          <button
+            onClick={fetchEvents}
+            className="mt-3 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+          >
+            Retry Fetch
+          </button>
+        </div>
+        <div className="flex items-center justify-center h-64 bg-white rounded-lg border border-gray-200">
+          <p className="text-gray-500">Insufficient data. Start using your widget to see analytics.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto pb-20 lg:pb-0">
       <div className="mb-6 md:mb-8">
@@ -170,7 +180,12 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
             <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
             <p className="text-sm md:text-base text-gray-600">Performance instrumentation and reporting</p>
           </div>
-          <TimeSelector value={timeRange} onChange={setTimeRange} />
+          <TimeSelector
+            value={timeRange}
+            onChange={setTimeRange}
+            compareMode={compareMode}
+            onCompareModeChange={setCompareMode}
+          />
         </div>
       </div>
 
@@ -179,21 +194,25 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
           title="Quotes Completed"
           value={metrics.quotesCompleted}
           baseline={quotesCompletedComparison}
+          description="Total quotes completed in selected period"
         />
         <MetricCard
           title="Deposit Conversion"
           value={`${metrics.depositConversionRate.toFixed(1)}%`}
           baseline={depositConversionComparison}
+          description="Deposits paid ÷ completed quotes"
         />
         <MetricCard
           title="Avg Quote Value"
           value={`$${metrics.avgQuoteValue.toFixed(2)}`}
           baseline={avgQuoteValueComparison}
+          description="Average of completed quotes"
         />
         <MetricCard
           title="Total Deposits Collected"
           value={`$${metrics.totalDepositsCollected.toFixed(2)}`}
           baseline={totalDepositsComparison}
+          description="Deposits collected in selected period"
         />
       </div>
 
@@ -637,4 +656,9 @@ function filterEventsByTimeRange(events: FunnelEvent[], range: TimeRange): Funne
   cutoffDate.setDate(cutoffDate.getDate() - days);
 
   return events.filter(e => new Date(e.timestamp) >= cutoffDate);
+}
+
+function getCurrentPeriodDays(range: TimeRange): number {
+  const daysMap: Record<TimeRange, number> = { '7d': 7, '30d': 30, '90d': 90, 'all': 365 };
+  return daysMap[range] || 30;
 }
