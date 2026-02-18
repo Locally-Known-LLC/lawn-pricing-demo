@@ -5,6 +5,7 @@ import TimeSelector, { TimeRange, CompareMode } from './analytics/TimeSelector';
 import { FunnelEvent, calculateFunnelMetrics, calculateFunnelSteps, calculateDailyMetrics } from '../utils/analyticsAggregation';
 import { shouldEnableBaseline, getBaselineForMetric, compareToBaseline } from '../utils/baselineComparison';
 import { checkTrendChartDataGate, checkFunnelVisualizationGate } from '../utils/dataGates';
+import { generateMicroInsights } from '../utils/microInsights';
 import { supabase } from '../lib/supabase';
 
 interface Quote {
@@ -101,6 +102,8 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
 
   const trendChartGate = checkTrendChartDataGate(filteredEvents);
   const funnelGate = checkFunnelVisualizationGate(metrics.quotesCompleted);
+
+  const insights = generateMicroInsights(filteredEvents, metrics, funnelSteps, depositConversionBaseline);
 
   const quoteCompletionTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.quotesCompleted }));
   const depositRevenueTrendData = dailyMetrics.map(d => ({ date: d.date, value: d.depositsCollected }));
@@ -260,15 +263,42 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Understanding Your Metrics</h3>
-          <a
-            href="#"
-            className="text-sm text-gray-600 hover:text-gray-900 flex items-center gap-1"
-          >
-            What affects deposit conversion?
-            <ExternalLink className="w-4 h-4" />
-          </a>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          {insights.length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Observations</h3>
+              <ul className="space-y-2">
+                {insights.map((insight, i) => (
+                  <li key={i} className="text-sm text-gray-700">{insight.text}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-1">Observations</h3>
+              <p className="text-sm text-gray-400">Available after 100 completed quotes.</p>
+            </div>
+          )}
+          <div className="flex flex-col gap-2 sm:items-end flex-shrink-0">
+            <a
+              href="https://help.lawnpricing.com/deposit-conversion"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+            >
+              What affects deposit conversion?
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <a
+              href="https://help.lawnpricing.com/avg-quote-value"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors"
+            >
+              How is average quote value calculated?
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </div>
 
@@ -547,6 +577,9 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
   );
 }
 
+const GRID_LINES = 4;
+const CHART_PADDING = { top: 10, right: 8, bottom: 24, left: 0 };
+
 function TrendChartComponent({ title, data, hasMinimumData, insufficientDataMessage, valueFormatter }: {
   title: string;
   data: Array<{ date: string; value: number }>;
@@ -565,36 +598,114 @@ function TrendChartComponent({ title, data, hasMinimumData, insufficientDataMess
     );
   }
 
-  const maxValue = Math.max(...data.map(d => d.value), 1);
+  const points = data.slice(-28);
+  const maxValue = Math.max(...points.map(d => d.value), 1);
   const formatValue = valueFormatter || ((v: number) => v.toString());
+
+  const gridMax = Math.ceil(maxValue / GRID_LINES) * GRID_LINES || GRID_LINES;
+  const gridTicks = Array.from({ length: GRID_LINES + 1 }, (_, i) =>
+    gridMax - (gridMax / GRID_LINES) * i
+  );
+
+  const svgWidth = 400;
+  const svgHeight = 160;
+  const chartWidth = svgWidth - CHART_PADDING.left - CHART_PADDING.right;
+  const chartHeight = svgHeight - CHART_PADDING.top - CHART_PADDING.bottom;
+
+  const toX = (i: number) =>
+    CHART_PADDING.left + (points.length > 1 ? (i / (points.length - 1)) * chartWidth : chartWidth / 2);
+  const toY = (value: number) =>
+    CHART_PADDING.top + chartHeight - (value / gridMax) * chartHeight;
+
+  const linePath = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i)} ${toY(p.value)}`)
+    .join(' ');
+
+  const areaPath =
+    `M ${toX(0)} ${toY(points[0].value)} ` +
+    points.slice(1).map((p, i) => `L ${toX(i + 1)} ${toY(p.value)}`).join(' ') +
+    ` L ${toX(points.length - 1)} ${CHART_PADDING.top + chartHeight}` +
+    ` L ${toX(0)} ${CHART_PADDING.top + chartHeight} Z`;
+
+  const showEveryNth = Math.ceil(points.length / 7) || 1;
+  const gradientId = `area-gradient-${title.replace(/\s+/g, '')}`;
+  const yLabelWidth = 44;
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="space-y-3">
-        {data.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">No data available</p>
-          </div>
-        ) : (
-          data.slice(-14).map((point, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-20 flex-shrink-0">
-                {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </span>
-              <div className="flex-1 bg-gray-100 rounded-full h-8 relative">
-                <div
-                  className="bg-green-500 h-full rounded-full flex items-center justify-end pr-2"
-                  style={{ width: `${(point.value / maxValue) * 100}%`, minWidth: point.value > 0 ? '40px' : '0' }}
+      <h3 className="text-lg font-semibold text-gray-900 mb-5">{title}</h3>
+      <div className="flex gap-2">
+        <div className="flex flex-col justify-between" style={{ width: yLabelWidth, paddingBottom: CHART_PADDING.bottom }}>
+          {gridTicks.map((tick) => (
+            <span key={tick} className="text-xs text-gray-400 text-right leading-none block">
+              {formatValue(tick)}
+            </span>
+          ))}
+        </div>
+        <div className="flex-1 min-w-0">
+          <svg
+            viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+            preserveAspectRatio="none"
+            className="w-full"
+            style={{ height: svgHeight }}
+          >
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1f2937" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="#1f2937" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {gridTicks.map((tick, i) => (
+              <line
+                key={tick}
+                x1={CHART_PADDING.left}
+                x2={svgWidth - CHART_PADDING.right}
+                y1={CHART_PADDING.top + (i / GRID_LINES) * chartHeight}
+                y2={CHART_PADDING.top + (i / GRID_LINES) * chartHeight}
+                stroke="#f3f4f6"
+                strokeWidth="1"
+              />
+            ))}
+            <path d={areaPath} fill={`url(#${gradientId})`} />
+            <path
+              d={linePath}
+              fill="none"
+              stroke="#1f2937"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            {points.map((point, i) => (
+              <circle
+                key={i}
+                cx={toX(i)}
+                cy={toY(point.value)}
+                r="2.5"
+                fill="white"
+                stroke="#1f2937"
+                strokeWidth="1.5"
+              />
+            ))}
+            {points.map((point, i) => {
+              const show = i % showEveryNth === 0 || i === points.length - 1;
+              if (!show) return null;
+              const d = new Date(point.date + 'T00:00:00');
+              const label = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+              return (
+                <text
+                  key={i}
+                  x={toX(i)}
+                  y={svgHeight - 4}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#9ca3af"
                 >
-                  {point.value > 0 && (
-                    <span className="text-xs font-medium text-white">{formatValue(point.value)}</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
+                  {label}
+                </text>
+              );
+            })}
+          </svg>
+        </div>
       </div>
     </div>
   );

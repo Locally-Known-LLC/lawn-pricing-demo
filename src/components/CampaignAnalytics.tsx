@@ -8,6 +8,7 @@ import TimeSelector, { TimeRange } from './analytics/TimeSelector';
 import { FunnelEvent, calculateFunnelMetrics, calculateFunnelSteps, calculateDailyMetrics } from '../utils/analyticsAggregation';
 import { shouldEnableBaseline, getBaselineForMetric, compareToBaseline } from '../utils/baselineComparison';
 import { checkTrendChartDataGate, checkBaselineDataGate, checkFunnelVisualizationGate } from '../utils/dataGates';
+import { supabase } from '../lib/supabase';
 
 interface CampaignAnalyticsProps {
   onBack: () => void;
@@ -15,7 +16,17 @@ interface CampaignAnalyticsProps {
 
 export default function CampaignAnalytics({ onBack }: CampaignAnalyticsProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
-  const [allEvents] = useState<FunnelEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<FunnelEvent[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('funnel_events')
+      .select('*')
+      .order('timestamp', { ascending: true })
+      .then(({ data }) => {
+        if (data) setAllEvents(data as FunnelEvent[]);
+      });
+  }, []);
 
   const filteredEvents = filterEventsByTimeRange(allEvents, timeRange);
   const metrics = calculateFunnelMetrics(filteredEvents);
