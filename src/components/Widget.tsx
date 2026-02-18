@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Circle, CheckCircle2, Layers, AlertTriangle } from 'lucide-react';
+import { Plus, Circle, Layers, AlertTriangle, ExternalLink, Globe, Code2 } from 'lucide-react';
 import WidgetConfigurator from './widget/WidgetConfigurator';
+import HostedPagePreviewModal from './widget/HostedPagePreviewModal';
 import {
   type WidgetVariant,
   type Service,
@@ -24,6 +25,8 @@ interface Props {
 export default function Widget({ onNavigate }: Props) {
   const [variants, setVariants] = useState<WidgetVariant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const [previewVariant, setPreviewVariant] = useState<WidgetVariant | null>(null);
+  const [pendingStep, setPendingStep] = useState<number | null>(null);
 
   const selectedVariant = variants.find((v) => v.id === selectedVariantId) || null;
 
@@ -33,13 +36,24 @@ export default function Widget({ onNavigate }: Props) {
     }
   };
 
-  const handleCreateVariant = () => {
+  const handleCreateVariant = (platform?: 'hosted' | 'embed') => {
     if (variants.length >= MAX_VARIANTS) return;
     const id = crypto.randomUUID();
     const name = `Widget ${variants.length + 1}`;
     const newVariant = createDefaultVariant(id, name);
+    if (platform === 'hosted') {
+      newVariant.installPlatform = 'hosted';
+      newVariant.hostedPageConfig = {
+        slug: '',
+        companyName: '',
+        hostedPageLive: false,
+      };
+    }
     setVariants([...variants, newVariant]);
     setSelectedVariantId(id);
+    if (platform === 'hosted') {
+      setPendingStep(5);
+    }
   };
 
   const handleUpdateVariant = (updated: WidgetVariant) => {
@@ -58,8 +72,10 @@ export default function Widget({ onNavigate }: Props) {
           variant={selectedVariant}
           services={MOCK_SERVICES}
           onUpdate={handleUpdateVariant}
-          onClose={() => setSelectedVariantId(null)}
+          onClose={() => { setSelectedVariantId(null); setPendingStep(null); }}
           onNavigateToServices={handleNavigateToServices}
+          initialStep={pendingStep as 1 | 2 | 3 | 4 | 5 | null}
+          onStepConsumed={() => setPendingStep(null)}
         />
       </div>
     );
@@ -74,21 +90,50 @@ export default function Widget({ onNavigate }: Props) {
         </div>
 
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-5">
-              <Layers className="w-8 h-8 text-gray-400" />
+          <div className="w-full max-w-xl">
+            <div className="text-center mb-8">
+              <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Layers className="w-7 h-7 text-gray-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">How would you like to deploy?</h2>
+              <p className="text-sm text-gray-500">Choose how customers will access your instant quote experience.</p>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No Widget Created Yet</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Create your first widget to activate your conversion engine.
-            </p>
-            <button
-              onClick={handleCreateVariant}
-              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Create Widget
-            </button>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                onClick={() => handleCreateVariant('hosted')}
+                className="group bg-white border-2 border-gray-200 hover:border-green-500 rounded-xl p-6 text-left transition-all hover:shadow-md"
+              >
+                <div className="w-10 h-10 bg-green-50 group-hover:bg-green-100 rounded-lg flex items-center justify-center mb-4 transition-colors">
+                  <Globe className="w-5 h-5 text-green-600" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Self-Hosted Page</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Get a standalone public URL — no website required. Share the link anywhere.
+                </p>
+                <span className="inline-block mt-3 text-xs font-medium text-green-600 group-hover:text-green-700 transition-colors">
+                  Get started &rarr;
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleCreateVariant('embed')}
+                className="group bg-white border-2 border-gray-200 hover:border-green-500 rounded-xl p-6 text-left transition-all hover:shadow-md"
+              >
+                <div className="w-10 h-10 bg-gray-100 group-hover:bg-green-100 rounded-lg flex items-center justify-center mb-4 transition-colors">
+                  <Code2 className="w-5 h-5 text-gray-500 group-hover:text-green-600 transition-colors" />
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Embed on Your Website</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Add the widget to WordPress, Wix, Webflow, or any custom site with a snippet.
+                </p>
+                <span className="inline-block mt-3 text-xs font-medium text-green-600 group-hover:text-green-700 transition-colors">
+                  Get started &rarr;
+                </span>
+              </button>
+            </div>
+
+            <p className="text-center text-xs text-gray-400 mt-6">You can change or add deployment methods at any time.</p>
           </div>
         </div>
       </div>
@@ -177,19 +222,34 @@ export default function Widget({ onNavigate }: Props) {
                     )}
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-500">Install</span>
+                    <span className="text-gray-500">Deployment</span>
                     <span className="flex items-center gap-1.5">
-                      {variant.installStatus === 'installed' ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                          <span className="text-green-700 font-medium">Installed</span>
-                        </>
-                      ) : (
-                        <>
-                          <Circle className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-gray-500">Not Installed</span>
-                        </>
-                      )}
+                      {(() => {
+                        const isHosted = variant.installPlatform === 'hosted';
+                        const isEmbedded = variant.installPlatform && variant.installPlatform !== 'hosted';
+                        const hostedLive = isHosted && variant.hostedPageConfig?.hostedPageLive;
+                        if (isHosted && isEmbedded) return <span className="text-gray-700 font-medium">Both</span>;
+                        if (isHosted) return (
+                          <span className="flex items-center gap-1">
+                            <span className="text-gray-700 font-medium">Hosted</span>
+                            {hostedLive && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setPreviewVariant(variant); }}
+                                className="text-green-600 hover:text-green-700 transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </span>
+                        );
+                        if (isEmbedded) return <span className="text-gray-700 font-medium">Embedded</span>;
+                        return (
+                          <>
+                            <Circle className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-gray-500">Not set</span>
+                          </>
+                        );
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -219,6 +279,15 @@ export default function Widget({ onNavigate }: Props) {
           );
         })}
       </div>
+
+      {previewVariant && previewVariant.hostedPageConfig && (
+        <HostedPagePreviewModal
+          config={previewVariant.hostedPageConfig}
+          stylingConfig={previewVariant.stylingConfig}
+          entryConfig={previewVariant.entryConfig}
+          onClose={() => setPreviewVariant(null)}
+        />
+      )}
     </div>
   );
 }

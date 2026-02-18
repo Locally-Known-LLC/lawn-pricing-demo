@@ -1,22 +1,45 @@
 import { useState } from 'react';
-import { Copy, Check, Globe, Code, Puzzle } from 'lucide-react';
-import type { InstallPlatform } from './types';
+import { Copy, Check, Globe, Code, Puzzle, LayoutTemplate } from 'lucide-react';
+import type { InstallPlatform, HostedPageConfig, StylingConfig, EntryConfig } from './types';
+import HostedPageConfig from './HostedPageConfig';
 
 interface Props {
   variantId: string;
   variantName: string;
   platform: InstallPlatform | null;
   onPlatformChange: (platform: InstallPlatform) => void;
+  hostedPageConfig: HostedPageConfig | null;
+  linkedServiceId: string | null;
+  linkedServiceStatus: 'draft' | 'live' | null;
+  linkedServiceName: string | null;
+  stylingConfig: StylingConfig;
+  entryConfig: EntryConfig;
+  variantStatus: 'draft' | 'live';
+  onHostedPageConfigChange: (config: HostedPageConfig) => void;
 }
 
-const PLATFORMS: { value: InstallPlatform; label: string; icon: typeof Globe }[] = [
-  { value: 'wordpress', label: 'WordPress', icon: Globe },
-  { value: 'wix', label: 'Wix', icon: Globe },
-  { value: 'webflow', label: 'Webflow', icon: Globe },
-  { value: 'custom', label: 'Custom / Other', icon: Code },
+const PLATFORMS: { value: InstallPlatform; label: string; icon: typeof Globe; description: string }[] = [
+  { value: 'wordpress', label: 'WordPress', icon: Globe, description: 'Plugin or shortcode' },
+  { value: 'wix', label: 'Wix', icon: Globe, description: 'Embed HTML element' },
+  { value: 'webflow', label: 'Webflow', icon: Globe, description: 'Embed component' },
+  { value: 'custom', label: 'Custom / Other', icon: Code, description: 'Script tag embed' },
+  { value: 'hosted', label: 'Hosted Page', icon: LayoutTemplate, description: 'No website required' },
 ];
 
-export default function WidgetInstall({ variantId, variantName, platform, onPlatformChange }: Props) {
+export default function WidgetInstall({
+  variantId,
+  variantName,
+  platform,
+  onPlatformChange,
+  hostedPageConfig,
+  linkedServiceId,
+  linkedServiceStatus,
+  linkedServiceName,
+  stylingConfig,
+  entryConfig,
+  variantStatus,
+  onHostedPageConfigChange,
+}: Props) {
   const [copied, setCopied] = useState(false);
 
   const embedSnippet = `<script src="https://cdn.lawnpricing.com/widget.js"></script>
@@ -33,22 +56,38 @@ export default function WidgetInstall({ variantId, variantName, platform, onPlat
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const defaultHostedConfig = (): HostedPageConfig => ({
+    slug: variantName.toLowerCase().replace(/\s+/g, '-'),
+    companyName: '',
+    hostedPageLive: false,
+  });
+
+  const handlePlatformChange = (p: InstallPlatform) => {
+    onPlatformChange(p);
+    if (p === 'hosted' && !hostedPageConfig) {
+      onHostedPageConfigChange(defaultHostedConfig());
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg md:text-xl font-bold text-gray-900 mb-1">Install</h2>
-        <p className="text-sm text-gray-600">Add this widget to your website</p>
+        <p className="text-sm text-gray-600">Choose how to deploy this widget</p>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">Select Your Platform</label>
+        <label className="block text-sm font-medium text-gray-700 mb-3">Deployment Method</label>
         <div className="grid grid-cols-2 gap-3">
           {PLATFORMS.map((p) => {
             const Icon = p.icon;
+            const isHosted = p.value === 'hosted';
             return (
               <label
                 key={p.value}
-                className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-colors ${
+                  isHosted ? 'col-span-2' : ''
+                } ${
                   platform === p.value
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 hover:border-gray-300'
@@ -59,20 +98,36 @@ export default function WidgetInstall({ variantId, variantName, platform, onPlat
                   name="platform"
                   value={p.value}
                   checked={platform === p.value}
-                  onChange={() => onPlatformChange(p.value)}
+                  onChange={() => handlePlatformChange(p.value)}
                   className="sr-only"
                 />
-                <Icon className={`w-5 h-5 ${platform === p.value ? 'text-green-600' : 'text-gray-400'}`} />
-                <span className={`text-sm font-medium ${platform === p.value ? 'text-green-900' : 'text-gray-900'}`}>
-                  {p.label}
-                </span>
+                <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${platform === p.value ? 'text-green-600' : 'text-gray-400'}`} />
+                <div>
+                  <span className={`text-sm font-medium block ${platform === p.value ? 'text-green-900' : 'text-gray-900'}`}>
+                    {p.label}
+                  </span>
+                  <span className="text-xs text-gray-500">{p.description}</span>
+                </div>
               </label>
             );
           })}
         </div>
       </div>
 
-      {platform && (
+      {platform === 'hosted' && hostedPageConfig && (
+        <HostedPageConfig
+          config={hostedPageConfig}
+          linkedServiceId={linkedServiceId}
+          linkedServiceStatus={linkedServiceStatus}
+          linkedServiceName={linkedServiceName}
+          stylingConfig={stylingConfig}
+          entryConfig={entryConfig}
+          variantStatus={variantStatus}
+          onChange={onHostedPageConfigChange}
+        />
+      )}
+
+      {platform && platform !== 'hosted' && (
         <div className="pt-4 border-t border-gray-200 space-y-4">
           {platform === 'wordpress' && (
             <>

@@ -5,7 +5,7 @@ export type InstallStatus = 'installed' | 'not_installed';
 export type LeadCaptureTiming = 'before_measurement' | 'after_measurement' | 'before_quote_reveal' | 'disabled';
 export type QuoteDisplayMode = 'exact' | 'starting_at';
 export type ButtonStyleOption = 'solid' | 'outline';
-export type InstallPlatform = 'wordpress' | 'wix' | 'webflow' | 'custom';
+export type InstallPlatform = 'wordpress' | 'wix' | 'webflow' | 'custom' | 'hosted';
 export type WidgetStep = 1 | 2 | 3 | 4 | 5;
 
 export interface Service {
@@ -40,6 +40,12 @@ export interface StylingConfig {
   customCss: string;
 }
 
+export interface HostedPageConfig {
+  slug: string;
+  companyName: string;
+  hostedPageLive: boolean;
+}
+
 export interface WidgetVariant {
   id: string;
   name: string;
@@ -55,6 +61,7 @@ export interface WidgetVariant {
   conversionConfig: ConversionConfig;
   stylingConfig: StylingConfig;
   installPlatform: InstallPlatform | null;
+  hostedPageConfig: HostedPageConfig | null;
   originalLiveState?: WidgetVariant;
 }
 
@@ -126,6 +133,7 @@ export function createDefaultVariant(id: string, name: string): WidgetVariant {
     conversionConfig: { ...DEFAULT_CONVERSION_CONFIG },
     stylingConfig: { ...DEFAULT_STYLING_CONFIG },
     installPlatform: null,
+    hostedPageConfig: null,
   };
 }
 

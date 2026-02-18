@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronRight, ArrowLeft, Save, AlertCircle, X, RotateCcw } from 'lucide-react';
 import type { WidgetVariant, WidgetStep, Service } from './types';
 import { canPublishVariant } from './types';
@@ -14,6 +14,8 @@ interface Props {
   onUpdate: (variant: WidgetVariant) => void;
   onClose: () => void;
   onNavigateToServices: () => void;
+  initialStep?: 1 | 2 | 3 | 4 | 5 | null;
+  onStepConsumed?: () => void;
 }
 
 const STEPS = [
@@ -24,9 +26,15 @@ const STEPS = [
   { number: 5, title: 'Install', subtitle: 'Go live' },
 ];
 
-export default function WidgetConfigurator({ variant, services, onUpdate, onClose, onNavigateToServices }: Props) {
-  const [currentStep, setCurrentStep] = useState<WidgetStep>(1);
+export default function WidgetConfigurator({ variant, services, onUpdate, onClose, onNavigateToServices, initialStep, onStepConsumed }: Props) {
+  const [currentStep, setCurrentStep] = useState<WidgetStep>(initialStep ?? 1);
   const [showServiceChangeModal, setShowServiceChangeModal] = useState(false);
+
+  useEffect(() => {
+    if (initialStep && onStepConsumed) {
+      onStepConsumed();
+    }
+  }, []);
   const [pendingServiceChange, setPendingServiceChange] = useState<{ id: string; name: string; status: 'draft' | 'live' } | null>(null);
 
   const handleVariantChange = (updates: Partial<WidgetVariant>) => {
@@ -129,6 +137,14 @@ export default function WidgetConfigurator({ variant, services, onUpdate, onClos
             variantName={variant.name}
             platform={variant.installPlatform}
             onPlatformChange={(installPlatform) => handleVariantChange({ installPlatform })}
+            hostedPageConfig={variant.hostedPageConfig}
+            linkedServiceId={variant.linkedServiceId}
+            linkedServiceStatus={variant.linkedServiceStatus}
+            linkedServiceName={variant.linkedServiceName}
+            stylingConfig={variant.stylingConfig}
+            entryConfig={variant.entryConfig}
+            variantStatus={variant.status}
+            onHostedPageConfigChange={(hostedPageConfig) => handleVariantChange({ hostedPageConfig })}
           />
         );
     }
