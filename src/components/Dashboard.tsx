@@ -45,9 +45,11 @@ export default function Dashboard({ onNavigate }: DashboardProps = {}) {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Fetching events for account:', accountId);
-      console.log('🔗 Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
-      console.log('🔑 Anon Key exists:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+      if (!supabase) {
+        setAllEvents([]);
+        setLoading(false);
+        return;
+      }
 
       const { data, error: fetchError } = await supabase
         .from('funnel_events')

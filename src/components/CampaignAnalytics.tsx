@@ -19,6 +19,7 @@ export default function CampaignAnalytics({ onBack }: CampaignAnalyticsProps) {
   const [allEvents, setAllEvents] = useState<FunnelEvent[]>([]);
 
   useEffect(() => {
+    if (!supabase) return;
     supabase
       .from('funnel_events')
       .select('*')
